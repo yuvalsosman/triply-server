@@ -1,0 +1,50 @@
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Binary files
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+
+# Log files
+*.log
+*.log.*
+
+# PID files
+*.pid
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Go specific
+*.test
+*.out
+vendor/
+
+# Backup files
+*.bak
+
+# Air (hot reload) temporary files
+.air/
