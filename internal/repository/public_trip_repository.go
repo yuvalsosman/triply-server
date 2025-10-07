@@ -15,7 +15,6 @@ type PublicTripRepository interface {
 	FindByID(ctx context.Context, id string) (*models.Trip, error)
 	FindBySlug(ctx context.Context, slug string) (*models.Trip, error)
 	ToggleVisibility(ctx context.Context, tripID string, userID string, visibility string) error
-	IncrementViewCount(ctx context.Context, tripID string) error
 }
 
 // PublicTripFilters holds filter criteria for listing public trips
@@ -25,9 +24,6 @@ type PublicTripFilters struct {
 	MinDays       *int
 	MaxDays       *int
 	Months        []int
-	Seasons       []string
-	BudgetLevels  []string
-	Paces         []string
 	Tags          []string
 	TravelerTypes []string
 	Sort          string
@@ -70,20 +66,6 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 		query = query.Where("EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?", *filters.MaxDays)
 	}
 
-	if len(filters.Seasons) > 0 {
-		for _, season := range filters.Seasons {
-			query = query.Where("EXISTS (SELECT 1 FROM unnest(trips.seasons) s WHERE s = ?)", season)
-		}
-	}
-
-	if len(filters.BudgetLevels) > 0 {
-		query = query.Where("trips.budget_level IN ?", filters.BudgetLevels)
-	}
-
-	if len(filters.Paces) > 0 {
-		query = query.Where("trips.pace IN ?", filters.Paces)
-	}
-
 	if len(filters.Tags) > 0 {
 		for _, tag := range filters.Tags {
 			query = query.Where("EXISTS (SELECT 1 FROM unnest(trips.tags) t WHERE t = ?)", tag)
@@ -91,9 +73,7 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 	}
 
 	if len(filters.TravelerTypes) > 0 {
-		for _, ttype := range filters.TravelerTypes {
-			query = query.Where("EXISTS (SELECT 1 FROM unnest(trips.traveler_types) tt WHERE tt = ?)", ttype)
-		}
+		query = query.Where("trips.traveler_type IN ?", filters.TravelerTypes)
 	}
 
 	// Count total - reuse the same query conditions
@@ -230,11 +210,4 @@ func (r *publicTripRepository) ToggleVisibility(ctx context.Context, tripID stri
 		Model(&models.Trip{}).
 		Where("id = ? AND user_id = ?", tripID, userID).
 		Updates(updates).Error
-}
-
-func (r *publicTripRepository) IncrementViewCount(ctx context.Context, tripID string) error {
-	return r.db.WithContext(ctx).
-		Model(&models.Trip{}).
-		Where("id = ?", tripID).
-		UpdateColumn("view_count", gorm.Expr("view_count + ?", 1)).Error
 }

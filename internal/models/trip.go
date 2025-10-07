@@ -2,6 +2,16 @@ package models
 
 import "time"
 
+// TravelerType represents the type of travelers
+type TravelerType string
+
+const (
+	TravelerTypeSolo    TravelerType = "סולו"
+	TravelerTypeCouple  TravelerType = "זוג"
+	TravelerTypeFamily  TravelerType = "משפחה"
+	TravelerTypeFriends TravelerType = "חברים"
+)
+
 // Trip represents a trip (both private and public)
 type Trip struct {
 	ID     string `json:"id" gorm:"primaryKey;size:64"`
@@ -27,19 +37,10 @@ type Trip struct {
 	Status     string `json:"status" gorm:"size:20;default:'planning'"`          // planning, active, completed, archived
 
 	// Public Trip Metadata (only for public trips)
-	Summary       *string     `json:"summary" gorm:"type:text"`
-	Highlights    StringArray `json:"highlights" gorm:"type:text"`
-	BudgetLevel   *string     `json:"budgetLevel" gorm:"size:20"`      // budget, moderate, premium, luxury
-	Pace          *string     `json:"pace" gorm:"size:20"`             // relaxed, balanced, packed
-	Tags          StringArray `json:"tags" gorm:"type:text"`           // culture, foodie, adventure
-	TravelerTypes StringArray `json:"travelerTypes" gorm:"type:text"`  // solo, couple, family, friends
-	Seasons       StringArray `json:"seasons" gorm:"type:text"`        // spring, summer, autumn, winter
-	Likes         int         `json:"likes" gorm:"default:0"`
-	ViewCount     int         `json:"viewCount" gorm:"default:0"`
-
-	// Estimated Cost
-	EstimatedCostAmount   *int    `json:"estimatedCostAmount"`
-	EstimatedCostCurrency *string `json:"estimatedCostCurrency" gorm:"size:3"` // JPY, USD, EUR
+	Summary      *string     `json:"summary" gorm:"type:text"`
+	Tags         StringArray `json:"tags" gorm:"type:text"`                           // culture, foodie, adventure
+	TravelerType string      `json:"travelerType" gorm:"size:50;not null;default:''"` // סולו, זוג, משפחה, חברים (single value)
+	Likes        int         `json:"likes" gorm:"default:0"`
 
 	// Timestamps
 	CreatedAt   time.Time  `json:"createdAt"`
@@ -47,7 +48,7 @@ type Trip struct {
 	PublishedAt *time.Time `json:"publishedAt"`
 
 	// Relations
-	User               *User               `json:"-" gorm:"foreignKey:UserID"`
-	DayPlans           []DayPlan           `json:"dayPlans,omitempty" gorm:"foreignKey:TripID;constraint:OnDelete:CASCADE"`
-	TripDestinations   []TripDestination   `json:"-" gorm:"foreignKey:TripID;constraint:OnDelete:CASCADE"`
+	User             *User             `json:"-" gorm:"foreignKey:UserID"`
+	DayPlans         []DayPlan         `json:"dayPlans,omitempty" gorm:"foreignKey:TripID;constraint:OnDelete:CASCADE"`
+	TripDestinations []TripDestination `json:"-" gorm:"foreignKey:TripID;constraint:OnDelete:CASCADE"`
 }

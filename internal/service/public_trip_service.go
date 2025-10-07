@@ -50,9 +50,6 @@ func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPu
 		MinDays:       req.MinDays,
 		MaxDays:       req.MaxDays,
 		Months:        req.Months,
-		Seasons:       req.Seasons,
-		BudgetLevels:  req.BudgetLevels,
-		Paces:         req.Paces,
 		Tags:          req.Tags,
 		TravelerTypes: req.TravelerTypes,
 		Sort:          req.Sort,
@@ -87,11 +84,6 @@ func (s *publicTripService) GetPublicTrip(ctx context.Context, tripID string) (*
 		}
 		return nil, err
 	}
-
-	// Increment view count (async, fire and forget)
-	go func() {
-		_ = s.publicTripRepo.IncrementViewCount(context.Background(), tripID)
-	}()
 
 	return s.toPublicTripDetail(publicTrip), nil
 }
@@ -147,16 +139,6 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 		heroImage = *trip.HeroImage
 	}
 
-	budgetLevel := ""
-	if trip.BudgetLevel != nil {
-		budgetLevel = *trip.BudgetLevel
-	}
-
-	pace := ""
-	if trip.Pace != nil {
-		pace = *trip.Pace
-	}
-
 	// Get start month from first day plan if available
 	startMonth := 1
 	if len(trip.DayPlans) > 0 {
@@ -167,32 +149,23 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 	}
 
 	return dto.PublicTripSummary{
-		ID:            trip.ID,
-		Title:         trip.Name,
-		Slug:          slug,
-		HeroImageURL:  heroImage,
-		Summary:       trip.Summary,
-		OriginCities:  originCities,
-		DurationDays:  durationDays,
-		StartMonth:    startMonth,
-		Seasons:       trip.Seasons,
-		BudgetLevel:   budgetLevel,
-		Pace:          pace,
-		Tags:          trip.Tags,
-		TravelerTypes: trip.TravelerTypes,
-		UpdatedAt:     trip.UpdatedAt.Format(time.RFC3339),
-		Likes:         trip.Likes,
+		ID:           trip.ID,
+		Title:        trip.Name,
+		Slug:         slug,
+		HeroImageURL: heroImage,
+		Summary:      trip.Summary,
+		OriginCities: originCities,
+		DurationDays: durationDays,
+		StartMonth:   startMonth,
+		Tags:         trip.Tags,
+		TravelerType: trip.TravelerType,
+		UpdatedAt:    trip.UpdatedAt.Format(time.RFC3339),
+		Likes:        trip.Likes,
 	}
 }
 
 func (s *publicTripService) toPublicTripDetail(trip *models.Trip) *dto.PublicTripDetail {
 	summary := s.toPublicTripSummary(trip)
-
-	// Extract highlights
-	highlights := make([]string, 0)
-	if trip.Highlights != nil {
-		highlights = trip.Highlights
-	}
 
 	// Build author info
 	author := dto.Author{
@@ -201,15 +174,6 @@ func (s *publicTripService) toPublicTripDetail(trip *models.Trip) *dto.PublicTri
 	if trip.User != nil {
 		author.Name = trip.User.Name
 		author.AvatarURL = trip.User.AvatarURL
-	}
-
-	// Build estimated cost
-	var estimatedCost *dto.EstimatedCost
-	if trip.EstimatedCostAmount != nil && trip.EstimatedCostCurrency != nil {
-		estimatedCost = &dto.EstimatedCost{
-			Amount:   *trip.EstimatedCostAmount,
-			Currency: *trip.EstimatedCostCurrency,
-		}
 	}
 
 	// Build metadata
@@ -221,16 +185,13 @@ func (s *publicTripService) toPublicTripDetail(trip *models.Trip) *dto.PublicTri
 	metadata := dto.Metadata{
 		CreatedAt:   trip.CreatedAt.Format(time.RFC3339),
 		PublishedAt: publishedAt,
-		ViewCount:   trip.ViewCount,
 		Likes:       trip.Likes,
 	}
 
 	return &dto.PublicTripDetail{
 		PublicTripSummary: summary,
-		Highlights:        highlights,
 		Itinerary:         trip.DayPlans,
 		Author:            author,
-		EstimatedCost:     estimatedCost,
 		Metadata:          metadata,
 	}
 }
