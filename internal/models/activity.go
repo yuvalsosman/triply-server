@@ -1,48 +1,54 @@
 package models
 
-import "gorm.io/gorm"
+import "time"
 
-// Coordinates represents geographic coordinates
-type Coordinates struct {
-	Lat float64 `json:"lat" gorm:"column:lat"`
-	Lng float64 `json:"lng" gorm:"column:lng"`
-}
-
-// Activity represents a single activity within a day plan
+// Activity represents a reusable activity that can be used in multiple trips
 type Activity struct {
-	ID        string   `json:"id" gorm:"primaryKey;size:64"`
-	DayPlanID string   `json:"-" gorm:"index"`
-	Title     string   `json:"title"`
-	TimeOfDay string   `json:"timeOfDay"` // start|mid|end
-	Order     int      `json:"order"`
-	Location  string   `json:"location"`
-	Address   *string  `json:"address"`
-	Type      string   `json:"type"` // transportation|culture|accommodation|meal|experience
-	Cost      *string  `json:"cost"`
-	PlaceID   *string  `json:"placeId"`
-	Lat       *float64 `json:"-"`
-	Lng       *float64 `json:"-"`
+	ID string `json:"id" gorm:"primaryKey;size:64"`
 
-	// Transient JSON field to map coordinates to Lat/Lng
-	Coordinates *Coordinates `json:"coordinates" gorm:"-:all"`
+	// Basic Info
+	Title       string  `json:"title" gorm:"size:255;not null"`
+	Description *string `json:"description" gorm:"type:text"`
+	Type        string  `json:"type" gorm:"size:50;not null;index"` // meal, culture, transportation, accommodation, etc.
+
+	// Location
+	Location  *string  `json:"location" gorm:"size:255"`
+	Address   *string  `json:"address" gorm:"type:text"`
+	Latitude  *float64 `json:"latitude" gorm:"type:decimal(10,8)"`
+	Longitude *float64 `json:"longitude" gorm:"type:decimal(11,8)"`
+	PlaceID   *string  `json:"placeId" gorm:"size:255"` // Google Maps Place ID
+
+	// Details
+	DurationMinutes       *int    `json:"durationMinutes"`
+	EstimatedCostAmount   *int    `json:"estimatedCostAmount"`
+	EstimatedCostCurrency *string `json:"estimatedCostCurrency" gorm:"size:3"`
+
+	// Media
+	ImageURL *string     `json:"imageUrl" gorm:"type:text"`
+	Images   StringArray `json:"images" gorm:"type:text"` // JSON array
+
+	// Metadata
+	Tags StringArray `json:"tags" gorm:"type:text"` // photography, family-friendly, must-see
+	URL  *string     `json:"url" gorm:"type:text"`  // external link
+
+	// Stats (for recommendations)
+	UsageCount    int     `json:"usageCount" gorm:"default:0;index:idx_usage,sort:desc"`
+	AverageRating float64 `json:"averageRating" gorm:"type:decimal(3,2);default:0"`
+
+	// Created by (optional - for user-generated activities)
+	CreatedByUserID *string `json:"createdByUserId" gorm:"size:64"`
+	IsVerified      bool    `json:"isVerified" gorm:"default:false"` // curated activities
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// Relations
+	CreatedByUser     *User               `json:"-" gorm:"foreignKey:CreatedByUserID"`
+	DayPlanActivities []DayPlanActivity   `json:"-" gorm:"foreignKey:ActivityID"`
+	ActivityImports   []ActivityImport    `json:"-" gorm:"foreignKey:ActivityID"`
 }
 
-// BeforeSave hook to convert coordinates to lat/lng columns
-func (a *Activity) BeforeSave(tx *gorm.DB) (err error) {
-	if a.Coordinates != nil {
-		a.Lat = &a.Coordinates.Lat
-		a.Lng = &a.Coordinates.Lng
-	} else {
-		a.Lat = nil
-		a.Lng = nil
-	}
-	return nil
-}
-
-// AfterFind hook to populate coordinates from lat/lng columns
-func (a *Activity) AfterFind(tx *gorm.DB) (err error) {
-	if a.Lat != nil && a.Lng != nil {
-		a.Coordinates = &Coordinates{Lat: *a.Lat, Lng: *a.Lng}
-	}
-	return nil
+// TableName specifies the table name for Activity
+func (Activity) TableName() string {
+	return "activities"
 }

@@ -9,8 +9,8 @@ import (
 
 // ActivityRepository defines the interface for activity data operations
 type ActivityRepository interface {
-	FindByDayPlanID(ctx context.Context, dayPlanID string) ([]models.Activity, error)
-	UpdateOrders(ctx context.Context, activities []models.Activity) error
+	FindByDayPlanID(ctx context.Context, dayPlanID string) ([]models.DayPlanActivity, error)
+	UpdateOrders(ctx context.Context, dayPlanActivities []models.DayPlanActivity) error
 }
 
 type activityRepository struct {
@@ -22,26 +22,27 @@ func NewActivityRepository(db *gorm.DB) ActivityRepository {
 	return &activityRepository{db: db}
 }
 
-func (r *activityRepository) FindByDayPlanID(ctx context.Context, dayPlanID string) ([]models.Activity, error) {
-	var activities []models.Activity
+func (r *activityRepository) FindByDayPlanID(ctx context.Context, dayPlanID string) ([]models.DayPlanActivity, error) {
+	var dayPlanActivities []models.DayPlanActivity
 	err := r.db.WithContext(ctx).
+		Preload("Activity").
 		Where("day_plan_id = ?", dayPlanID).
-		Order("time_of_day, \"order\"").
-		Find(&activities).Error
+		Order("time_of_day, order_within_time").
+		Find(&dayPlanActivities).Error
 	if err != nil {
 		return nil, err
 	}
-	return activities, nil
+	return dayPlanActivities, nil
 }
 
-func (r *activityRepository) UpdateOrders(ctx context.Context, activities []models.Activity) error {
+func (r *activityRepository) UpdateOrders(ctx context.Context, dayPlanActivities []models.DayPlanActivity) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, activity := range activities {
-			if err := tx.Model(&models.Activity{}).
-				Where("id = ?", activity.ID).
+		for _, dpa := range dayPlanActivities {
+			if err := tx.Model(&models.DayPlanActivity{}).
+				Where("id = ?", dpa.ID).
 				Updates(map[string]interface{}{
-					"time_of_day": activity.TimeOfDay,
-					"order":       activity.Order,
+					"time_of_day":       dpa.TimeOfDay,
+					"order_within_time": dpa.OrderWithinTime,
 				}).Error; err != nil {
 				return err
 			}

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 	"triply-server/internal/dto"
 	"triply-server/internal/models"
@@ -16,8 +15,6 @@ import (
 type PublicTripService interface {
 	ListPublicTrips(ctx context.Context, req *dto.ListPublicTripsRequest) (*dto.ListPublicTripsResponse, error)
 	GetPublicTrip(ctx context.Context, tripID string) (*dto.PublicTripDetail, error)
-	PublishTrip(ctx context.Context, userID, tripID string) (*models.PublicTrip, error)
-	UnpublishTrip(ctx context.Context, userID, tripID string) error
 	ToggleVisibility(ctx context.Context, userID, tripID, visibility string) (*dto.PublicTripDetail, error)
 }
 
@@ -91,197 +88,149 @@ func (s *publicTripService) GetPublicTrip(ctx context.Context, tripID string) (*
 		return nil, err
 	}
 
+	// Increment view count (async, fire and forget)
+	go func() {
+		_ = s.publicTripRepo.IncrementViewCount(context.Background(), tripID)
+	}()
+
 	return s.toPublicTripDetail(publicTrip), nil
-}
-
-func (s *publicTripService) PublishTrip(ctx context.Context, userID, tripID string) (*models.PublicTrip, error) {
-	// Get trip
-	trip, err := s.tripRepo.FindByID(ctx, tripID, userID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, utils.NewNotFoundError("Trip")
-		}
-		return nil, err
-	}
-
-	// Update trip visibility
-	trip.Visibility = "public"
-	if err := s.tripRepo.Update(ctx, trip); err != nil {
-		return nil, err
-	}
-
-	// Check if public trip record already exists
-	existingPT, err := s.publicTripRepo.FindByTripID(ctx, tripID)
-	if err == nil {
-		// Update existing
-		existingPT.UpdatedAt = time.Now()
-		if err := s.publicTripRepo.Update(ctx, existingPT); err != nil {
-			return nil, err
-		}
-		return existingPT, nil
-	}
-
-	// Create new public trip record
-	publicTrip := s.generatePublicTripFromTrip(trip)
-	if err := s.publicTripRepo.Create(ctx, publicTrip); err != nil {
-		return nil, err
-	}
-
-	return publicTrip, nil
-}
-
-func (s *publicTripService) UnpublishTrip(ctx context.Context, userID, tripID string) error {
-	// Get trip
-	trip, err := s.tripRepo.FindByID(ctx, tripID, userID)
-	if err != nil {
-		return err
-	}
-
-	// Update trip visibility
-	trip.Visibility = "private"
-	return s.tripRepo.Update(ctx, trip)
 }
 
 func (s *publicTripService) ToggleVisibility(ctx context.Context, userID, tripID, visibility string) (*dto.PublicTripDetail, error) {
-	// Get trip
+	// Validate visibility
+	if visibility != "public" && visibility != "private" && visibility != "unlisted" {
+		return nil, utils.NewValidationError("visibility must be 'public', 'private', or 'unlisted'")
+	}
+
+	// Toggle visibility
+	if err := s.publicTripRepo.ToggleVisibility(ctx, tripID, userID, visibility); err != nil {
+		return nil, err
+	}
+
+	// Get updated trip
 	trip, err := s.tripRepo.FindByID(ctx, tripID, userID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, utils.NewNotFoundError("Trip")
-		}
 		return nil, err
 	}
 
-	// Update visibility
-	trip.Visibility = visibility
-	if err := s.tripRepo.Update(ctx, trip); err != nil {
-		return nil, err
-	}
-
-	// If making public, ensure public trip record exists
-	if visibility == "public" {
-		_, err := s.PublishTrip(ctx, userID, tripID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Get public trip
-	publicTrip, err := s.publicTripRepo.FindByTripID(ctx, tripID)
-	if err != nil {
-		// If not found, create a minimal response
-		return &dto.PublicTripDetail{
-			PublicTripSummary: dto.PublicTripSummary{
-				ID:    tripID,
-				Title: trip.Name,
-			},
-			Metadata: models.PublicTripMetadata{
-				Visibility: visibility,
-				UpdatedAt:  time.Now(),
-			},
-		}, nil
-	}
-
-	return s.toPublicTripDetail(publicTrip), nil
+	return s.toPublicTripDetail(trip), nil
 }
 
-func (s *publicTripService) generatePublicTripFromTrip(trip *models.Trip) *models.PublicTrip {
+// Helper methods to convert models to DTOs
+func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTripSummary {
 	// Extract origin cities from destinations
-	cities := make([]string, 0, len(trip.Destinations))
-	for _, dest := range trip.Destinations {
-		cities = append(cities, dest.City)
+	originCities := make([]string, 0)
+	for _, td := range trip.TripDestinations {
+		if td.Destination != nil {
+			originCities = append(originCities, td.Destination.City)
+		}
 	}
 
-	// Calculate duration
-	// This is simplified - in reality you'd parse the dates
-	duration := 7 // Default
-
-	return &models.PublicTrip{
-		ID:     utils.GenerateID("pt"),
-		TripID: trip.ID,
-		Slug:   fmt.Sprintf("%s-%s", trip.Name, trip.ID),
-		HeroImageURL: func() string {
-			if trip.CoverImage != nil {
-				return *trip.CoverImage
-			}
-			return ""
-		}(),
-		OriginCities:  cities,
-		DurationDays:  duration,
-		StartMonth:    1, // Parse from trip.StartDate
-		Seasons:       []string{"spring"},
-		BudgetLevel:   "moderate",
-		Pace:          "balanced",
-		Tags:          []string{},
-		TravelerTypes: []string{},
-		Likes:         0,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+	// Calculate duration from day plans count (more reliable than parsing dates)
+	durationDays := len(trip.DayPlans)
+	if durationDays == 0 {
+		// Fallback to date calculation if no day plans
+		start, _ := time.Parse("2006-01-02", trip.StartDate)
+		end, _ := time.Parse("2006-01-02", trip.EndDate)
+		if !start.IsZero() && !end.IsZero() {
+			durationDays = int(end.Sub(start).Hours()/24) + 1
+		}
 	}
-}
 
-func (s *publicTripService) toPublicTripSummary(pt *models.PublicTrip) dto.PublicTripSummary {
-	title := pt.Slug
-	if pt.Trip != nil {
-		title = pt.Trip.Name
+	slug := ""
+	if trip.Slug != nil {
+		slug = *trip.Slug
+	}
+
+	heroImage := ""
+	if trip.HeroImage != nil {
+		heroImage = *trip.HeroImage
+	}
+
+	budgetLevel := ""
+	if trip.BudgetLevel != nil {
+		budgetLevel = *trip.BudgetLevel
+	}
+
+	pace := ""
+	if trip.Pace != nil {
+		pace = *trip.Pace
+	}
+
+	// Get start month from first day plan if available
+	startMonth := 1
+	if len(trip.DayPlans) > 0 {
+		firstDate, err := time.Parse(time.RFC3339, trip.DayPlans[0].Date)
+		if err == nil {
+			startMonth = int(firstDate.Month())
+		}
 	}
 
 	return dto.PublicTripSummary{
-		ID:            pt.ID,
-		Title:         title,
-		Slug:          pt.Slug,
-		HeroImageURL:  pt.HeroImageURL,
-		Summary:       pt.Summary,
-		OriginCities:  pt.OriginCities,
-		DurationDays:  pt.DurationDays,
-		StartMonth:    pt.StartMonth,
-		Seasons:       pt.Seasons,
-		BudgetLevel:   pt.BudgetLevel,
-		Pace:          pt.Pace,
-		Tags:          pt.Tags,
-		TravelerTypes: pt.TravelerTypes,
-		UpdatedAt:     pt.UpdatedAt.Format(time.RFC3339),
-		Likes:         pt.Likes,
+		ID:            trip.ID,
+		Title:         trip.Name,
+		Slug:          slug,
+		HeroImageURL:  heroImage,
+		Summary:       trip.Summary,
+		OriginCities:  originCities,
+		DurationDays:  durationDays,
+		StartMonth:    startMonth,
+		Seasons:       trip.Seasons,
+		BudgetLevel:   budgetLevel,
+		Pace:          pace,
+		Tags:          trip.Tags,
+		TravelerTypes: trip.TravelerTypes,
+		UpdatedAt:     trip.UpdatedAt.Format(time.RFC3339),
+		Likes:         trip.Likes,
 	}
 }
 
-func (s *publicTripService) toPublicTripDetail(pt *models.PublicTrip) *dto.PublicTripDetail {
-	summary := s.toPublicTripSummary(pt)
+func (s *publicTripService) toPublicTripDetail(trip *models.Trip) *dto.PublicTripDetail {
+	summary := s.toPublicTripSummary(trip)
 
-	itinerary := []models.DayPlan{}
-	if pt.Trip != nil {
-		for _, dest := range pt.Trip.Destinations {
-			itinerary = append(itinerary, dest.DailyPlans...)
+	// Extract highlights
+	highlights := make([]string, 0)
+	if trip.Highlights != nil {
+		highlights = trip.Highlights
+	}
+
+	// Build author info
+	author := dto.Author{
+		Name: "Anonymous",
+	}
+	if trip.User != nil {
+		author.Name = trip.User.Name
+		author.AvatarURL = trip.User.AvatarURL
+	}
+
+	// Build estimated cost
+	var estimatedCost *dto.EstimatedCost
+	if trip.EstimatedCostAmount != nil && trip.EstimatedCostCurrency != nil {
+		estimatedCost = &dto.EstimatedCost{
+			Amount:   *trip.EstimatedCostAmount,
+			Currency: *trip.EstimatedCostCurrency,
 		}
 	}
 
-	detail := &dto.PublicTripDetail{
+	// Build metadata
+	publishedAt := ""
+	if trip.PublishedAt != nil {
+		publishedAt = trip.PublishedAt.Format(time.RFC3339)
+	}
+
+	metadata := dto.Metadata{
+		CreatedAt:   trip.CreatedAt.Format(time.RFC3339),
+		PublishedAt: publishedAt,
+		ViewCount:   trip.ViewCount,
+		Likes:       trip.Likes,
+	}
+
+	return &dto.PublicTripDetail{
 		PublicTripSummary: summary,
-		Highlights:        pt.Highlights,
-		Itinerary:         itinerary,
-		Author: models.PublicTripAuthor{
-			Name:      pt.AuthorName,
-			AvatarURL: pt.AuthorAvatarURL,
-			HomeCity:  pt.AuthorHomeCity,
-		},
-		Metadata: models.PublicTripMetadata{
-			Visibility: func() string {
-				if pt.Trip != nil {
-					return pt.Trip.Visibility
-				}
-				return "public"
-			}(),
-			CreatedAt: pt.CreatedAt,
-			UpdatedAt: pt.UpdatedAt,
-		},
+		Highlights:        highlights,
+		Itinerary:         trip.DayPlans,
+		Author:            author,
+		EstimatedCost:     estimatedCost,
+		Metadata:          metadata,
 	}
-
-	if pt.EstimatedCostCurrency != nil && pt.EstimatedCostAmount != nil {
-		detail.EstimatedCost = &models.PublicTripCost{
-			Currency: *pt.EstimatedCostCurrency,
-			Amount:   *pt.EstimatedCostAmount,
-		}
-	}
-
-	return detail
 }

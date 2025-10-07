@@ -5,7 +5,6 @@ import (
 	"triply-server/internal/models"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // TripRepository defines the interface for trip data operations
@@ -33,9 +32,22 @@ func (r *tripRepository) FindByUserID(ctx context.Context, userID string) ([]mod
 	var trips []models.Trip
 	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
-		Preload("Destinations").
-		Preload("Destinations.DailyPlans").
-		Preload("Destinations.DailyPlans.Activities").
+		Preload("TripDestinations", func(db *gorm.DB) *gorm.DB {
+			return db.Order("trip_destinations.order_index ASC")
+		}).
+		Preload("TripDestinations.Destination").
+		Preload("DayPlans", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_plans.day_number ASC")
+		}).
+		Preload("DayPlans.DayPlanDestinations", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_plan_destinations.order_index ASC")
+		}).
+		Preload("DayPlans.DayPlanDestinations.Destination").
+		Preload("DayPlans.DayPlanActivities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_plan_activities.time_of_day, day_plan_activities.order_within_time ASC")
+		}).
+		Preload("DayPlans.DayPlanActivities.Activity").
+		Order("trips.updated_at DESC").
 		Find(&trips).Error
 	if err != nil {
 		return nil, err
@@ -43,13 +55,30 @@ func (r *tripRepository) FindByUserID(ctx context.Context, userID string) ([]mod
 	return trips, nil
 }
 
+func (r *tripRepository) FindByShadowUserID(ctx context.Context, shadowUserID string) ([]models.Trip, error) {
+	// Shadow trips are stored with the shadow user ID as the user_id
+	return r.FindByUserID(ctx, shadowUserID)
+}
+
 func (r *tripRepository) FindByID(ctx context.Context, tripID, userID string) (*models.Trip, error) {
 	var trip models.Trip
 	err := r.db.WithContext(ctx).
 		Where("id = ? AND user_id = ?", tripID, userID).
-		Preload("Destinations").
-		Preload("Destinations.DailyPlans").
-		Preload("Destinations.DailyPlans.Activities").
+		Preload("TripDestinations", func(db *gorm.DB) *gorm.DB {
+			return db.Order("trip_destinations.order_index ASC")
+		}).
+		Preload("TripDestinations.Destination").
+		Preload("DayPlans", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_plans.day_number ASC")
+		}).
+		Preload("DayPlans.DayPlanDestinations", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_plan_destinations.order_index ASC")
+		}).
+		Preload("DayPlans.DayPlanDestinations.Destination").
+		Preload("DayPlans.DayPlanActivities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_plan_activities.time_of_day, day_plan_activities.order_within_time ASC")
+		}).
+		Preload("DayPlans.DayPlanActivities.Activity").
 		First(&trip).Error
 	if err != nil {
 		return nil, err
@@ -57,61 +86,67 @@ func (r *tripRepository) FindByID(ctx context.Context, tripID, userID string) (*
 	return &trip, nil
 }
 
-func (r *tripRepository) Create(ctx context.Context, trip *models.Trip) error {
-	return r.db.WithContext(ctx).
-		Session(&gorm.Session{FullSaveAssociations: true}).
-		Clauses(clause.OnConflict{DoNothing: true}).
-		Create(trip).Error
+func (r *tripRepository) FindByIDWithShadowUser(ctx context.Context, tripID, shadowUserID string) (*models.Trip, error) {
+	return r.FindByID(ctx, tripID, shadowUserID)
 }
 
-func (r *tripRepository) Update(ctx context.Context, trip *models.Trip) error {
+func (r *tripRepository) Create(ctx context.Context, trip *models.Trip) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Check if trip exists
-		var existing models.Trip
-		if err := tx.Where("id = ? AND user_id = ?", trip.ID, trip.UserID).First(&existing).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				// If not found, create it
-				return tx.Session(&gorm.Session{FullSaveAssociations: true}).Create(trip).Error
-			}
+		// Create the trip
+		if err := tx.Create(trip).Error; err != nil {
 			return err
 		}
 
-		// Delete existing destinations and their children (cascade will handle the rest)
-		if err := tx.Where("trip_id = ?", trip.ID).Delete(&models.Destination{}).Error; err != nil {
-			return err
-		}
-
-		// Update main trip fields
-		if err := tx.Model(&models.Trip{}).Where("id = ? AND user_id = ?", trip.ID, trip.UserID).Updates(map[string]interface{}{
-			"name":           trip.Name,
-			"description":    trip.Description,
-			"traveler_count": trip.TravelerCount,
-			"start_date":     trip.StartDate,
-			"end_date":       trip.EndDate,
-			"locale":         trip.Locale,
-			"visibility":     trip.Visibility,
-			"status":         trip.Status,
-			"timezone":       trip.Timezone,
-			"cover_image":    trip.CoverImage,
-			"updated_at":     trip.UpdatedAt,
-		}).Error; err != nil {
-			return err
-		}
-
-		// Recreate associations
-		for i := range trip.Destinations {
-			trip.Destinations[i].TripID = trip.ID
-			for j := range trip.Destinations[i].DailyPlans {
-				trip.Destinations[i].DailyPlans[j].DestinationID = trip.Destinations[i].ID
-				for k := range trip.Destinations[i].DailyPlans[j].Activities {
-					trip.Destinations[i].DailyPlans[j].Activities[k].DayPlanID = trip.Destinations[i].DailyPlans[j].ID
+		// If trip has day plans with nested data, save them
+		if len(trip.DayPlans) > 0 {
+			for i := range trip.DayPlans {
+				trip.DayPlans[i].TripID = trip.ID
+				if err := tx.Create(&trip.DayPlans[i]).Error; err != nil {
+					return err
 				}
 			}
 		}
 
-		if len(trip.Destinations) > 0 {
-			if err := tx.Session(&gorm.Session{FullSaveAssociations: true}).Create(&trip.Destinations).Error; err != nil {
-				return err
+		return nil
+	})
+}
+
+func (r *tripRepository) Update(ctx context.Context, trip *models.Trip) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Update trip basic info
+		if err := tx.Model(&models.Trip{}).
+			Where("id = ? AND user_id = ?", trip.ID, trip.UserID).
+			Updates(trip).Error; err != nil {
+			return err
+		}
+
+		// Delete existing day plans and related data (cascade will handle activities)
+		if err := tx.Where("trip_id = ?", trip.ID).Delete(&models.DayPlan{}).Error; err != nil {
+			return err
+		}
+
+		// Delete existing trip destinations
+		if err := tx.Where("trip_id = ?", trip.ID).Delete(&models.TripDestination{}).Error; err != nil {
+			return err
+		}
+
+		// Recreate day plans if provided
+		if len(trip.DayPlans) > 0 {
+			for i := range trip.DayPlans {
+				trip.DayPlans[i].TripID = trip.ID
+				if err := tx.Create(&trip.DayPlans[i]).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// Recreate trip destinations if provided
+		if len(trip.TripDestinations) > 0 {
+			for i := range trip.TripDestinations {
+				trip.TripDestinations[i].TripID = trip.ID
+				if err := tx.Create(&trip.TripDestinations[i]).Error; err != nil {
+					return err
+				}
 			}
 		}
 
@@ -125,41 +160,9 @@ func (r *tripRepository) Delete(ctx context.Context, tripID, userID string) erro
 		Delete(&models.Trip{}).Error
 }
 
-func (r *tripRepository) FindByShadowUserID(ctx context.Context, shadowUserID string) ([]models.Trip, error) {
-	var trips []models.Trip
-	err := r.db.WithContext(ctx).
-		Where("shadow_user_id = ?", shadowUserID).
-		Preload("Destinations").
-		Preload("Destinations.DailyPlans").
-		Preload("Destinations.DailyPlans.Activities").
-		Find(&trips).Error
-	if err != nil {
-		return nil, err
-	}
-	return trips, nil
-}
-
-func (r *tripRepository) FindByIDWithShadowUser(ctx context.Context, tripID, shadowUserID string) (*models.Trip, error) {
-	var trip models.Trip
-	err := r.db.WithContext(ctx).
-		Where("id = ? AND shadow_user_id = ?", tripID, shadowUserID).
-		Preload("Destinations").
-		Preload("Destinations.DailyPlans").
-		Preload("Destinations.DailyPlans.Activities").
-		First(&trip).Error
-	if err != nil {
-		return nil, err
-	}
-	return &trip, nil
-}
-
 func (r *tripRepository) MigrateShadowTrips(ctx context.Context, shadowUserID, userID string) error {
-	// Update all trips with shadow_user_id to have user_id and clear shadow_user_id
 	return r.db.WithContext(ctx).
 		Model(&models.Trip{}).
-		Where("shadow_user_id = ?", shadowUserID).
-		Updates(map[string]interface{}{
-			"user_id":        userID,
-			"shadow_user_id": nil,
-		}).Error
+		Where("user_id = ?", shadowUserID).
+		Update("user_id", userID).Error
 }

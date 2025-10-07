@@ -35,7 +35,7 @@ func (h *TripHandler) ListTrips(c *fiber.Ctx) error {
 	var err error
 
 	if userID != "" {
-		trips, err = h.tripService.GetUserTrips(c.Context(), userID)
+		trips, err = h.tripService.ListTrips(c.Context(), userID)
 	} else {
 		trips, err = h.tripService.GetShadowUserTrips(c.Context(), shadowUserID)
 	}
@@ -65,10 +65,12 @@ func (h *TripHandler) CreateTrip(c *fiber.Ctx) error {
 	var created *models.Trip
 	var err error
 
+	// Set the user ID on the trip
 	if userID != "" {
-		created, err = h.tripService.CreateTrip(c.Context(), userID, &req.Trip)
+		req.Trip.UserID = userID
+		created, err = h.tripService.CreateTrip(c.Context(), &req.Trip)
 	} else {
-		created, err = h.tripService.CreateShadowTrip(c.Context(), shadowUserID, &req.Trip)
+		created, err = h.tripService.CreateShadowTrip(c.Context(), &req.Trip, shadowUserID)
 	}
 
 	if err != nil {
@@ -107,10 +109,12 @@ func (h *TripHandler) UpdateTrip(c *fiber.Ctx) error {
 	var updated *models.Trip
 	var err error
 
+	// Set the user ID on the trip
 	if userID != "" {
-		updated, err = h.tripService.UpdateTrip(c.Context(), userID, &req.Trip)
+		req.Trip.UserID = userID
+		updated, err = h.tripService.UpdateTrip(c.Context(), &req.Trip)
 	} else {
-		updated, err = h.tripService.UpdateShadowTrip(c.Context(), shadowUserID, &req.Trip)
+		updated, err = h.tripService.UpdateShadowTrip(c.Context(), &req.Trip, shadowUserID)
 	}
 
 	if err != nil {

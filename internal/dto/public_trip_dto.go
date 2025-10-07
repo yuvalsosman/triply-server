@@ -21,14 +21,35 @@ type PublicTripSummary struct {
 	Likes         int      `json:"likes"`
 }
 
+// Author information for public trips
+type Author struct {
+	Name      string  `json:"name"`
+	AvatarURL *string `json:"avatarUrl,omitempty"`
+	City      *string `json:"city,omitempty"`
+}
+
+// EstimatedCost for public trips
+type EstimatedCost struct {
+	Amount   int    `json:"amount"`
+	Currency string `json:"currency"`
+}
+
+// Metadata for public trips
+type Metadata struct {
+	CreatedAt   string `json:"createdAt"`
+	PublishedAt string `json:"publishedAt"`
+	ViewCount   int    `json:"viewCount"`
+	Likes       int    `json:"likes"`
+}
+
 // PublicTripDetail represents full details of a public trip
 type PublicTripDetail struct {
 	PublicTripSummary
-	Highlights    []string                  `json:"highlights,omitempty"`
-	Itinerary     []models.DayPlan          `json:"itinerary"`
-	Author        models.PublicTripAuthor   `json:"author"`
-	EstimatedCost *models.PublicTripCost    `json:"estimatedCost,omitempty"`
-	Metadata      models.PublicTripMetadata `json:"metadata"`
+	Highlights    []string         `json:"highlights,omitempty"`
+	Itinerary     []models.DayPlan `json:"itinerary"`
+	Author        Author           `json:"author"`
+	EstimatedCost *EstimatedCost   `json:"estimatedCost,omitempty"`
+	Metadata      Metadata         `json:"metadata"`
 }
 
 // ListPublicTripsRequest represents filters for listing public trips

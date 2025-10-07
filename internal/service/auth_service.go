@@ -125,7 +125,7 @@ func (s *authService) UpdateDisplayName(ctx context.Context, userID, displayName
 		return nil, err
 	}
 
-	user.DisplayName = &displayName
+	user.DisplayName = displayName
 	user.UpdatedAt = time.Now()
 
 	if err := s.userRepo.Update(ctx, user); err != nil {

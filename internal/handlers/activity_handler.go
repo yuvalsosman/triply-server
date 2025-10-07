@@ -35,11 +35,11 @@ func (h *ActivityHandler) UpdateActivityOrder(c *fiber.Ctx) error {
 
 	// Return normalized orders
 	response := make([]dto.ActivityOrderPayload, 0, len(req.Activities))
-	for _, activity := range req.Activities {
+	for _, dpa := range req.Activities {
 		response = append(response, dto.ActivityOrderPayload{
-			ID:        activity.ID,
-			Order:     activity.Order,
-			TimeOfDay: activity.TimeOfDay,
+			ID:              dpa.ID,
+			OrderWithinTime: dpa.OrderWithinTime,
+			TimeOfDay:       dpa.TimeOfDay,
 		})
 	}
 

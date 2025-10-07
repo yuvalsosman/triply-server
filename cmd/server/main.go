@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 	"triply-server/internal/config"
@@ -39,6 +40,11 @@ func main() {
 	// Seed demo data
 	if err := seedDemoData(db); err != nil {
 		log.Printf("Failed to seed demo data: %v", err)
+	}
+
+	// Seed public trips
+	if err := seedPublicTrips(db); err != nil {
+		log.Printf("Failed to seed public trips: %v", err)
 	}
 
 	// Initialize repositories
@@ -147,13 +153,29 @@ func openDB(cfg *config.Config) (*gorm.DB, error) {
 }
 
 func autoMigrate(db *gorm.DB) error {
+	// Drop old tables if they exist
+	log.Println("🗑️  Dropping old tables...")
+	oldTables := []string{"public_trips", "activities", "daily_plans", "destinations", "trips", "users"}
+	for _, table := range oldTables {
+		if db.Migrator().HasTable(table) {
+			if err := db.Migrator().DropTable(table); err != nil {
+				log.Printf("Warning: failed to drop table %s: %v", table, err)
+			}
+		}
+	}
+
+	log.Println("📦 Migrating new schema...")
+	// Migrate in order to respect foreign key dependencies
 	return db.AutoMigrate(
 		&models.User{},
 		&models.Trip{},
 		&models.Destination{},
-		&models.DayPlan{},
 		&models.Activity{},
-		&models.PublicTrip{},
+		&models.DayPlan{},
+		&models.TripDestination{},
+		&models.DayPlanDestination{},
+		&models.DayPlanActivity{},
+		&models.ActivityImport{},
 	)
 }
 
@@ -201,6 +223,79 @@ func seedDemoData(db *gorm.DB) error {
 		return nil // Already seeded
 	}
 
+	// Create destinations
+	tokyoDest := models.Destination{
+		ID:              "dest-tokyo",
+		City:            "Tokyo",
+		Region:          ptr("Kanto"),
+		Country:         "Japan",
+		Latitude:        ptr(35.6762),
+		Longitude:       ptr(139.6503),
+		Timezone:        ptr("Asia/Tokyo"),
+		HeroImage:       ptr("https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1400&q=80"),
+		TripCount:       0,
+		PopularityScore: 0,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&tokyoDest).Error; err != nil {
+		return err
+	}
+
+	// Create activities
+	activities := []models.Activity{
+		{
+			ID:              "act-narita-express",
+			Title:           "Narita Express to Tokyo Station",
+			Type:            "transportation",
+			Location:        ptr("Narita Airport"),
+			PlaceID:         ptr("ChIJN5X73rWMImARPA6C8I-g2NA"),
+			DurationMinutes: ptr(90),
+			UsageCount:      0,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:         "act-hotel-checkin",
+			Title:      "Check-in at Nihonbashi boutique hotel",
+			Type:       "accommodation",
+			Location:   ptr("Chiyoda"),
+			Latitude:   ptr(35.6995),
+			Longitude:  ptr(139.7537),
+			UsageCount: 0,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+		{
+			ID:         "act-tsukiji-lunch",
+			Title:      "Lunch at Tsukiji Outer Market",
+			Type:       "meal",
+			Location:   ptr("Tsukiji"),
+			Latitude:   ptr(35.6655),
+			Longitude:  ptr(139.7708),
+			UsageCount: 0,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+		{
+			ID:         "act-asakusa-stroll",
+			Title:      "Evening stroll in Asakusa and Senso-ji",
+			Type:       "culture",
+			Location:   ptr("Asakusa"),
+			Latitude:   ptr(35.7148),
+			Longitude:  ptr(139.7967),
+			UsageCount: 0,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	for _, act := range activities {
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&act).Error; err != nil {
+			return err
+		}
+	}
+
 	// Create demo trip
 	desc := "Sample spring itinerary between Tokyo and Kyoto with a balance of culture and cuisine."
 	tz := "Asia/Tokyo"
@@ -214,82 +309,496 @@ func seedDemoData(db *gorm.DB) error {
 		TravelerCount: 2,
 		StartDate:     "2025-03-28",
 		EndDate:       "2025-04-10",
-		Locale:        "en",
-		Visibility:    "private",
-		Status:        "active",
 		Timezone:      &tz,
 		CoverImage:    &cover,
+		Visibility:    "private",
+		Status:        "planning",
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		Destinations: []models.Destination{
-			{
-				ID:        "dest-tokyo",
-				City:      "Tokyo",
-				Region:    ptr("Kanto"),
-				HeroImage: ptr("https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1400&q=80"),
-				StartDate: "2025-03-28",
-				EndDate:   "2025-04-02",
-				DailyPlans: []models.DayPlan{
-					{
-						ID:    "day-tokyo-1",
-						Date:  "2025-03-28",
-						Notes: ptr("Arrival day with light activities to adjust to the time zone."),
-						Activities: []models.Activity{
-							{
-								ID:        "act-1",
-								Title:     "Narita Express to Tokyo Station",
-								TimeOfDay: "start",
-								Order:     0,
-								Location:  "Narita Airport",
-								Type:      "transportation",
-								PlaceID:   ptr("ChIJN5X73rWMImARPA6C8I-g2NA"),
-							},
-							{
-								ID:        "act-2",
-								Title:     "Check-in at Nihonbashi boutique hotel",
-								TimeOfDay: "start",
-								Order:     1,
-								Location:  "Chiyoda",
-								Type:      "accommodation",
-								Coordinates: &models.Coordinates{
-									Lat: 35.6995,
-									Lng: 139.7537,
-								},
-							},
-							{
-								ID:        "act-3",
-								Title:     "Lunch at Tsukiji Outer Market",
-								TimeOfDay: "mid",
-								Order:     0,
-								Location:  "Tsukiji",
-								Type:      "meal",
-								Coordinates: &models.Coordinates{
-									Lat: 35.6655,
-									Lng: 139.7708,
-								},
-							},
-							{
-								ID:        "act-4",
-								Title:     "Evening stroll in Asakusa and Senso-ji",
-								TimeOfDay: "end",
-								Order:     0,
-								Location:  "Asakusa",
-								Type:      "culture",
-								Coordinates: &models.Coordinates{
-									Lat: 35.7148,
-									Lng: 139.7967,
-								},
-							},
-						},
-					},
-				},
-			},
+	}
+
+	if err := db.Create(&trip).Error; err != nil {
+		return err
+	}
+
+	// Link trip to destination
+	tripDest := models.TripDestination{
+		ID:            "td-1",
+		TripID:        trip.ID,
+		DestinationID: tokyoDest.ID,
+		OrderIndex:    0,
+		StartDate:     ptr("2025-03-28"),
+		EndDate:       ptr("2025-04-02"),
+		CreatedAt:     now,
+	}
+	if err := db.Create(&tripDest).Error; err != nil {
+		return err
+	}
+
+	// Create day plan
+	dayPlan := models.DayPlan{
+		ID:        "day-tokyo-1",
+		TripID:    trip.ID,
+		Date:      "2025-03-28",
+		DayNumber: 1,
+		Notes:     ptr("Arrival day with light activities to adjust to the time zone."),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := db.Create(&dayPlan).Error; err != nil {
+		return err
+	}
+
+	// Link destination to day plan
+	dayPlanDest := models.DayPlanDestination{
+		ID:            "dpd-1",
+		DayPlanID:     dayPlan.ID,
+		DestinationID: tokyoDest.ID,
+		OrderIndex:    0,
+		PartOfDay:     ptr("all-day"),
+		CreatedAt:     now,
+	}
+	if err := db.Create(&dayPlanDest).Error; err != nil {
+		return err
+	}
+
+	// Link activities to day plan
+	dayPlanActivities := []models.DayPlanActivity{
+		{
+			ID:              "dpa-1",
+			DayPlanID:       dayPlan.ID,
+			ActivityID:      "act-narita-express",
+			TimeOfDay:       "start",
+			OrderWithinTime: 0,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "dpa-2",
+			DayPlanID:       dayPlan.ID,
+			ActivityID:      "act-hotel-checkin",
+			TimeOfDay:       "start",
+			OrderWithinTime: 1,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "dpa-3",
+			DayPlanID:       dayPlan.ID,
+			ActivityID:      "act-tsukiji-lunch",
+			TimeOfDay:       "mid",
+			OrderWithinTime: 0,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "dpa-4",
+			DayPlanID:       dayPlan.ID,
+			ActivityID:      "act-asakusa-stroll",
+			TimeOfDay:       "end",
+			OrderWithinTime: 0,
+			CreatedAt:       now,
+			UpdatedAt:       now,
 		},
 	}
 
-	return db.Session(&gorm.Session{FullSaveAssociations: true}).
-		Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&trip).Error
+	for _, dpa := range dayPlanActivities {
+		if err := db.Create(&dpa).Error; err != nil {
+			return err
+		}
+	}
+
+	log.Println("✅ Seeded demo data successfully")
+	return nil
+}
+
+func seedPublicTrips(db *gorm.DB) error {
+	// Check if we already have public trips
+	var count int64
+	if err := db.Model(&models.Trip{}).Where("visibility = ?", "public").Count(&count).Error; err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return nil // Already seeded
+	}
+
+	// Get or create a demo author user for public trips
+	now := time.Now().UTC()
+	authorUser := models.User{
+		ID:        "user-public-author",
+		Name:      "Trip Curator",
+		Email:     "curator@triply.com",
+		Locale:    "en",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&authorUser).Error; err != nil {
+		return err
+	}
+
+	// Get destinations (or create if they don't exist)
+	destinations := map[string]models.Destination{
+		"Tokyo": {
+			ID:        "dest-tokyo-public",
+			City:      "Tokyo",
+			Region:    ptr("Kanto"),
+			Country:   "Japan",
+			Latitude:  ptr(35.6762),
+			Longitude: ptr(139.6503),
+			Timezone:  ptr("Asia/Tokyo"),
+			HeroImage: ptr("https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1400&q=80"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"Kyoto": {
+			ID:        "dest-kyoto-public",
+			City:      "Kyoto",
+			Region:    ptr("Kansai"),
+			Country:   "Japan",
+			Latitude:  ptr(35.0116),
+			Longitude: ptr(135.7681),
+			Timezone:  ptr("Asia/Tokyo"),
+			HeroImage: ptr("https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1400&q=80"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"Osaka": {
+			ID:        "dest-osaka-public",
+			City:      "Osaka",
+			Region:    ptr("Kansai"),
+			Country:   "Japan",
+			Latitude:  ptr(34.6937),
+			Longitude: ptr(135.5023),
+			Timezone:  ptr("Asia/Tokyo"),
+			HeroImage: ptr("https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=1400&q=80"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+
+	for _, dest := range destinations {
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&dest).Error; err != nil {
+			return err
+		}
+	}
+
+	// Create public trips
+	publicTrips := []struct {
+		trip         models.Trip
+		destinations []string
+	}{
+		{
+			trip: models.Trip{
+				ID:                    "pt-tokyo-week-discovery",
+				UserID:                authorUser.ID,
+				Name:                  "Tokyo Week Discovery",
+				Description:           ptr("Experience Tokyo's perfect blend of ancient tradition and cutting-edge modernity in one exciting week."),
+				Slug:                  ptr("tokyo-week-discovery"),
+				TravelerCount:         2,
+				StartDate:             "2025-05-15",
+				EndDate:               "2025-05-21",
+				HeroImage:             ptr("https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80"),
+				Visibility:            "public",
+				Status:                "completed",
+				Summary:               ptr("Experience Tokyo's perfect blend of ancient tradition and cutting-edge modernity in one exciting week."),
+				BudgetLevel:           ptr("moderate"),
+				Pace:                  ptr("balanced"),
+				Tags:                  models.StringArray{"culture", "foodie", "nightlife", "shopping", "photography"},
+				TravelerTypes:         models.StringArray{"couple", "friends"},
+				Seasons:               models.StringArray{"spring", "summer"},
+				Likes:                 312,
+				ViewCount:             1847,
+				EstimatedCostAmount:   ptr(280000),
+				EstimatedCostCurrency: ptr("JPY"),
+				CreatedAt:             now.AddDate(0, -1, -25),
+				UpdatedAt:             now.AddDate(0, 0, -20),
+				PublishedAt:           ptr(now.AddDate(0, -1, -24)),
+			},
+			destinations: []string{"Tokyo"},
+		},
+		{
+			trip: models.Trip{
+				ID:                    "pt-tokyo-kyoto-10days",
+				UserID:                authorUser.ID,
+				Name:                  "Tokyo & Kyoto Cultural Journey",
+				Description:           ptr("A perfect 10-day journey combining Tokyo's modern energy with Kyoto's timeless beauty and traditions."),
+				Slug:                  ptr("tokyo-kyoto-10-day-cultural-journey"),
+				TravelerCount:         2,
+				StartDate:             "2025-10-10",
+				EndDate:               "2025-10-19",
+				HeroImage:             ptr("https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1200&q=80"),
+				Visibility:            "public",
+				Status:                "completed",
+				Summary:               ptr("A perfect 10-day journey combining Tokyo's modern energy with Kyoto's timeless beauty and traditions."),
+				BudgetLevel:           ptr("moderate"),
+				Pace:                  ptr("balanced"),
+				Tags:                  models.StringArray{"culture", "temples", "foodie", "history", "photography"},
+				TravelerTypes:         models.StringArray{"couple", "friends"},
+				Seasons:               models.StringArray{"autumn"},
+				Likes:                 428,
+				ViewCount:             2631,
+				EstimatedCostAmount:   ptr(450000),
+				EstimatedCostCurrency: ptr("JPY"),
+				CreatedAt:             now.AddDate(0, -1, -13),
+				UpdatedAt:             now.AddDate(0, 0, -17),
+				PublishedAt:           ptr(now.AddDate(0, -1, -12)),
+			},
+			destinations: []string{"Tokyo", "Kyoto"},
+		},
+		{
+			trip: models.Trip{
+				ID:                    "pt-kansai-grand-tour-14days",
+				UserID:                authorUser.ID,
+				Name:                  "Ultimate Kansai Grand Tour",
+				Description:           ptr("The ultimate 2-week Japan adventure covering Tokyo's energy, Kyoto's culture, and Osaka's culinary delights."),
+				Slug:                  ptr("ultimate-kansai-tokyo-kyoto-osaka-14-days"),
+				TravelerCount:         2,
+				StartDate:             "2025-03-20",
+				EndDate:               "2025-04-02",
+				HeroImage:             ptr("https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=1200&q=80"),
+				Visibility:            "public",
+				Status:                "completed",
+				Summary:               ptr("The ultimate 2-week Japan adventure covering Tokyo's energy, Kyoto's culture, and Osaka's culinary delights."),
+				BudgetLevel:           ptr("moderate"),
+				Pace:                  ptr("balanced"),
+				Tags:                  models.StringArray{"culture", "foodie", "temples", "nightlife", "shopping", "photography"},
+				TravelerTypes:         models.StringArray{"couple", "friends"},
+				Seasons:               models.StringArray{"spring"},
+				Likes:                 567,
+				ViewCount:             3429,
+				EstimatedCostAmount:   ptr(680000),
+				EstimatedCostCurrency: ptr("JPY"),
+				CreatedAt:             now.AddDate(0, 0, -34),
+				UpdatedAt:             now.AddDate(0, 0, -15),
+				PublishedAt:           ptr(now.AddDate(0, 0, -33)),
+			},
+			destinations: []string{"Tokyo", "Kyoto", "Osaka"},
+		},
+	}
+
+	for _, pt := range publicTrips {
+		if err := db.Create(&pt.trip).Error; err != nil {
+			return err
+		}
+
+		// Link destinations to trip
+		for idx, destName := range pt.destinations {
+			dest := destinations[destName]
+			tripDest := models.TripDestination{
+				ID:            "td-" + pt.trip.ID + "-" + dest.ID,
+				TripID:        pt.trip.ID,
+				DestinationID: dest.ID,
+				OrderIndex:    idx,
+				CreatedAt:     now,
+			}
+			if err := db.Create(&tripDest).Error; err != nil {
+				return err
+			}
+		}
+
+		// Create sample day plans and activities for each trip
+		if err := seedTripItinerary(db, &pt.trip, destinations, now); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("✅ Seeded %d public trips with itineraries", len(publicTrips))
+	return nil
+}
+
+func seedTripItinerary(db *gorm.DB, trip *models.Trip, destinations map[string]models.Destination, now time.Time) error {
+	// Create sample activities (these will be reused across trips)
+	sampleActivities := []models.Activity{
+		{
+			ID:              "act-senso-ji",
+			Title:           "Visit Senso-ji Temple",
+			Type:            "culture",
+			Location:        ptr("Asakusa"),
+			Latitude:        ptr(35.7148),
+			Longitude:       ptr(139.7967),
+			Description:     ptr("Tokyo's oldest and most famous temple"),
+			DurationMinutes: ptr(90),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-tsukiji-market",
+			Title:           "Tsukiji Outer Market Food Tour",
+			Type:            "meal",
+			Location:        ptr("Tsukiji"),
+			Latitude:        ptr(35.6655),
+			Longitude:       ptr(139.7708),
+			Description:     ptr("Fresh sushi and street food experience"),
+			DurationMinutes: ptr(120),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-shibuya-crossing",
+			Title:           "Shibuya Crossing Experience",
+			Type:            "experience",
+			Location:        ptr("Shibuya"),
+			Latitude:        ptr(35.6595),
+			Longitude:       ptr(139.7004),
+			Description:     ptr("World's busiest pedestrian crossing"),
+			DurationMinutes: ptr(60),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-fushimi-inari",
+			Title:           "Fushimi Inari Shrine",
+			Type:            "culture",
+			Location:        ptr("Fushimi"),
+			Latitude:        ptr(34.9671),
+			Longitude:       ptr(135.7727),
+			Description:     ptr("Famous shrine with thousands of red torii gates"),
+			DurationMinutes: ptr(120),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-arashiyama-bamboo",
+			Title:           "Arashiyama Bamboo Grove",
+			Type:            "culture",
+			Location:        ptr("Arashiyama"),
+			Latitude:        ptr(35.0094),
+			Longitude:       ptr(135.6686),
+			Description:     ptr("Stunning bamboo forest path"),
+			DurationMinutes: ptr(90),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-osaka-castle",
+			Title:           "Osaka Castle Visit",
+			Type:            "culture",
+			Location:        ptr("Chuo Ward"),
+			Latitude:        ptr(34.6873),
+			Longitude:       ptr(135.5262),
+			Description:     ptr("Historic castle with panoramic city views"),
+			DurationMinutes: ptr(120),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-dotonbori",
+			Title:           "Dotonbori Food Street",
+			Type:            "meal",
+			Location:        ptr("Namba"),
+			Latitude:        ptr(34.6686),
+			Longitude:       ptr(135.5006),
+			Description:     ptr("Osaka's famous entertainment and food district"),
+			DurationMinutes: ptr(150),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+	}
+
+	// Create activities if they don't exist
+	for _, act := range sampleActivities {
+		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&act).Error; err != nil {
+			return err
+		}
+	}
+
+	// Parse trip dates
+	startDate, _ := time.Parse("2006-01-02", trip.StartDate)
+	endDate, _ := time.Parse("2006-01-02", trip.EndDate)
+
+	// Calculate number of days
+	durationDays := int(endDate.Sub(startDate).Hours()/24) + 1
+
+	// Create day plans based on trip duration
+	for i := 0; i < durationDays; i++ {
+		currentDate := startDate.AddDate(0, 0, i)
+		dayPlan := models.DayPlan{
+			ID:        fmt.Sprintf("%s-day-%d", trip.ID, i+1),
+			TripID:    trip.ID,
+			Date:      currentDate.Format("2006-01-02"),
+			DayNumber: i + 1,
+			Notes:     ptr(fmt.Sprintf("Day %d of the journey", i+1)),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+
+		if err := db.Create(&dayPlan).Error; err != nil {
+			return err
+		}
+
+		// Determine which destination for this day
+		var destID string
+		if trip.ID == "pt-tokyo-week-discovery" {
+			destID = destinations["Tokyo"].ID
+		} else if trip.ID == "pt-tokyo-kyoto-10days" {
+			if i < 5 {
+				destID = destinations["Tokyo"].ID
+			} else {
+				destID = destinations["Kyoto"].ID
+			}
+		} else if trip.ID == "pt-kansai-grand-tour-14days" {
+			if i < 5 {
+				destID = destinations["Tokyo"].ID
+			} else if i < 10 {
+				destID = destinations["Kyoto"].ID
+			} else {
+				destID = destinations["Osaka"].ID
+			}
+		}
+
+		// Link destination to day
+		dayPlanDest := models.DayPlanDestination{
+			ID:            fmt.Sprintf("dpd-%s-%d", trip.ID, i+1),
+			DayPlanID:     dayPlan.ID,
+			DestinationID: destID,
+			OrderIndex:    0,
+			PartOfDay:     ptr("all-day"),
+			CreatedAt:     now,
+		}
+		if err := db.Create(&dayPlanDest).Error; err != nil {
+			return err
+		}
+
+		// Add 2-3 activities per day
+		activityCount := 2 + (i % 2) // Alternates between 2 and 3 activities
+		for j := 0; j < activityCount; j++ {
+			var activityID string
+			timeOfDay := "start"
+
+			// Select appropriate activity based on destination and time
+			if destID == destinations["Tokyo"].ID {
+				activityID = []string{"act-senso-ji", "act-tsukiji-market", "act-shibuya-crossing"}[j%3]
+			} else if destID == destinations["Kyoto"].ID {
+				activityID = []string{"act-fushimi-inari", "act-arashiyama-bamboo"}[j%2]
+			} else {
+				activityID = []string{"act-osaka-castle", "act-dotonbori"}[j%2]
+			}
+
+			if j == 0 {
+				timeOfDay = "start"
+			} else if j == 1 {
+				timeOfDay = "mid"
+			} else {
+				timeOfDay = "end"
+			}
+
+			dayPlanActivity := models.DayPlanActivity{
+				ID:              fmt.Sprintf("dpa-%s-%d-%d", trip.ID, i+1, j+1),
+				DayPlanID:       dayPlan.ID,
+				ActivityID:      activityID,
+				TimeOfDay:       timeOfDay,
+				OrderWithinTime: 0,
+				CreatedAt:       now,
+				UpdatedAt:       now,
+			}
+			if err := db.Create(&dayPlanActivity).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func ptr[T any](v T) *T {

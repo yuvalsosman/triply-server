@@ -8,8 +8,8 @@ import (
 
 // ActivityService defines the interface for activity operations
 type ActivityService interface {
-	GetActivitiesByDayPlan(ctx context.Context, dayPlanID string) ([]models.Activity, error)
-	UpdateActivityOrders(ctx context.Context, dayPlanID string, activities []models.Activity) error
+	GetActivitiesByDayPlan(ctx context.Context, dayPlanID string) ([]models.DayPlanActivity, error)
+	UpdateActivityOrders(ctx context.Context, dayPlanID string, dayPlanActivities []models.DayPlanActivity) error
 }
 
 type activityService struct {
@@ -21,17 +21,15 @@ func NewActivityService(activityRepo repository.ActivityRepository) ActivityServ
 	return &activityService{activityRepo: activityRepo}
 }
 
-func (s *activityService) GetActivitiesByDayPlan(ctx context.Context, dayPlanID string) ([]models.Activity, error) {
+func (s *activityService) GetActivitiesByDayPlan(ctx context.Context, dayPlanID string) ([]models.DayPlanActivity, error) {
 	return s.activityRepo.FindByDayPlanID(ctx, dayPlanID)
 }
 
-func (s *activityService) UpdateActivityOrders(ctx context.Context, dayPlanID string, activities []models.Activity) error {
-	// Validate all activities belong to the same day plan
-	for _, activity := range activities {
-		if activity.DayPlanID != dayPlanID {
-			activity.DayPlanID = dayPlanID
-		}
+func (s *activityService) UpdateActivityOrders(ctx context.Context, dayPlanID string, dayPlanActivities []models.DayPlanActivity) error {
+	// Ensure all activities belong to the specified day plan
+	for i := range dayPlanActivities {
+		dayPlanActivities[i].DayPlanID = dayPlanID
 	}
 
-	return s.activityRepo.UpdateOrders(ctx, activities)
+	return s.activityRepo.UpdateOrders(ctx, dayPlanActivities)
 }
