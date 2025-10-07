@@ -8,7 +8,7 @@ type User struct {
 	GoogleID    *string   `json:"googleId,omitempty" gorm:"size:100;uniqueIndex"`
 	Name        string    `json:"name" gorm:"size:255;not null"`
 	Email       string    `json:"email" gorm:"size:255;uniqueIndex;not null"`
-	DisplayName string    `json:"displayName" gorm:"size:100"`
+	DisplayName *string   `json:"displayName,omitempty" gorm:"size:100"`
 	AvatarURL   *string   `json:"avatarUrl" gorm:"type:text"`
 	Locale      string    `json:"locale" gorm:"size:10;default:'en'"`
 	CreatedAt   time.Time `json:"createdAt"`

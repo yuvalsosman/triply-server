@@ -24,7 +24,6 @@ type PublicTripFilters struct {
 	MinDays       *int
 	MaxDays       *int
 	Months        []int
-	Tags          []string
 	TravelerTypes []string
 	Sort          string
 	Page          int
@@ -64,12 +63,6 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 
 	if filters.MaxDays != nil {
 		query = query.Where("EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?", *filters.MaxDays)
-	}
-
-	if len(filters.Tags) > 0 {
-		for _, tag := range filters.Tags {
-			query = query.Where("EXISTS (SELECT 1 FROM unnest(trips.tags) t WHERE t = ?)", tag)
-		}
 	}
 
 	if len(filters.TravelerTypes) > 0 {

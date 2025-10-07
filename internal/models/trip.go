@@ -37,10 +37,9 @@ type Trip struct {
 	Status     string `json:"status" gorm:"size:20;default:'planning'"`          // planning, active, completed, archived
 
 	// Public Trip Metadata (only for public trips)
-	Summary      *string     `json:"summary" gorm:"type:text"`
-	Tags         StringArray `json:"tags" gorm:"type:text"`                           // culture, foodie, adventure
-	TravelerType string      `json:"travelerType" gorm:"size:50;not null;default:''"` // סולו, זוג, משפחה, חברים (single value)
-	Likes        int         `json:"likes" gorm:"default:0"`
+	Summary      *string `json:"summary" gorm:"type:text"`
+	TravelerType string  `json:"travelerType" gorm:"size:50;not null;default:''"` // סולו, זוג, משפחה, חברים (single value)
+	Likes        int     `json:"likes" gorm:"default:0"`
 
 	// Timestamps
 	CreatedAt   time.Time  `json:"createdAt"`

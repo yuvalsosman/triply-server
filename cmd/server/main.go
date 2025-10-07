@@ -52,13 +52,15 @@ func main() {
 	tripRepo := repository.NewTripRepository(db)
 	publicTripRepo := repository.NewPublicTripRepository(db)
 	activityRepo := repository.NewActivityRepository(db)
+	tripLikeRepo := repository.NewTripLikeRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
 	tripService := service.NewTripService(tripRepo)
-	publicTripService := service.NewPublicTripService(publicTripRepo, tripRepo)
+	publicTripService := service.NewPublicTripService(publicTripRepo, tripRepo, tripLikeRepo)
 	activityService := service.NewActivityService(activityRepo)
 	importService := service.NewImportService(publicTripRepo, tripRepo)
+	tripLikeService := service.NewTripLikeService(tripLikeRepo)
 
 	// Initialize OAuth config
 	oauthConfig := setupOAuth(cfg)
@@ -69,6 +71,7 @@ func main() {
 	publicTripHandler := handlers.NewPublicTripHandler(publicTripService)
 	activityHandler := handlers.NewActivityHandler(activityService)
 	importHandler := handlers.NewImportHandler(importService)
+	tripLikeHandler := handlers.NewTripLikeHandler(tripLikeService)
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWT.Secret)
@@ -133,9 +136,10 @@ func main() {
 	apiRoutes.Post("/activities/order", activityHandler.UpdateActivityOrder)
 
 	// Public trips routes
-	apiRoutes.Get("/public-trips", publicTripHandler.ListPublicTrips)
-	apiRoutes.Get("/public-trips/:tripId", publicTripHandler.GetPublicTripDetail)
+	apiRoutes.Get("/public-trips", authMiddleware.OptionalAuth, publicTripHandler.ListPublicTrips)
+	apiRoutes.Get("/public-trips/:tripId", authMiddleware.OptionalAuth, publicTripHandler.GetPublicTripDetail)
 	apiRoutes.Post("/public-trips/:tripId/visibility", authMiddleware.OptionalAuth, publicTripHandler.ToggleVisibility)
+	apiRoutes.Post("/public-trips/:tripId/like", authMiddleware.RequireAuth, tripLikeHandler.ToggleLike)
 
 	// Import routes (protected)
 	apiRoutes.Post("/import-trip", authMiddleware.OptionalAuth, importHandler.ImportTripParts)
@@ -158,7 +162,7 @@ func autoMigrate(db *gorm.DB) error {
 	tablesToDrop := []string{
 		"activity_imports", "day_plan_activities", "day_plan_destinations",
 		"day_plans", "trip_destinations", "activities", "destinations",
-		"trips", "users", "public_trips", "daily_plans",
+		"trips", "users", "public_trips", "daily_plans", "trip_likes",
 	}
 	for _, table := range tablesToDrop {
 		if db.Migrator().HasTable(table) {
@@ -170,7 +174,7 @@ func autoMigrate(db *gorm.DB) error {
 
 	log.Println("📦 Migrating new schema...")
 	// Migrate in order to respect foreign key dependencies
-	return db.AutoMigrate(
+	err := db.AutoMigrate(
 		&models.User{},
 		&models.Trip{},
 		&models.Destination{},
@@ -180,7 +184,22 @@ func autoMigrate(db *gorm.DB) error {
 		&models.DayPlanDestination{},
 		&models.DayPlanActivity{},
 		&models.ActivityImport{},
+		&models.TripLike{},
 	)
+	if err != nil {
+		return err
+	}
+
+	// Add unique constraint for user-trip likes
+	err = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_user_trip_like 
+		ON trip_likes (user_id, trip_id)
+	`).Error
+	if err != nil {
+		log.Printf("Warning: Failed to create unique index: %v", err)
+	}
+
+	return nil
 }
 
 func setupOAuth(cfg *config.Config) *oauth2.Config {
@@ -506,7 +525,6 @@ func seedPublicTrips(db *gorm.DB) error {
 				Visibility:    "public",
 				Status:        "completed",
 				Summary:       ptr("חוו את השילוב המושלם של טוקיו בין מסורת עתיקה למודרניות חדשנית בשבוע מרגש."),
-				Tags:          models.StringArray{"culture", "foodie", "nightlife", "shopping", "photography"},
 				TravelerType:  string(models.TravelerTypeCouple),
 				Likes:         312,
 				CreatedAt:     now.AddDate(0, -1, -25),
@@ -529,7 +547,6 @@ func seedPublicTrips(db *gorm.DB) error {
 				Visibility:    "public",
 				Status:        "completed",
 				Summary:       ptr("מסע מושלם של 10 ימים המשלב את האנרגיה המודרנית של טוקיו עם היופי והמסורת הנצחית של קיוטו."),
-				Tags:          models.StringArray{"culture", "temples", "foodie", "history", "photography"},
 				TravelerType:  string(models.TravelerTypeFriends),
 				Likes:         428,
 				CreatedAt:     now.AddDate(0, -1, -13),
@@ -552,7 +569,6 @@ func seedPublicTrips(db *gorm.DB) error {
 				Visibility:    "public",
 				Status:        "completed",
 				Summary:       ptr("הרפתקת יפן האולטימטיבית של שבועיים המשלבת את האנרגיה של טוקיו, התרבות של קיוטו והקולינריה של אוסקה."),
-				Tags:          models.StringArray{"culture", "foodie", "temples", "nightlife", "shopping", "photography"},
 				TravelerType:  string(models.TravelerTypeFamily),
 				Likes:         567,
 				CreatedAt:     now.AddDate(0, 0, -34),

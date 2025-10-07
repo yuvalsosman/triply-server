@@ -13,25 +13,27 @@ import (
 
 // PublicTripService defines the interface for public trip operations
 type PublicTripService interface {
-	ListPublicTrips(ctx context.Context, req *dto.ListPublicTripsRequest) (*dto.ListPublicTripsResponse, error)
-	GetPublicTrip(ctx context.Context, tripID string) (*dto.PublicTripDetail, error)
+	ListPublicTrips(ctx context.Context, req *dto.ListPublicTripsRequest, userID *string) (*dto.ListPublicTripsResponse, error)
+	GetPublicTrip(ctx context.Context, tripID string, userID *string) (*dto.PublicTripDetail, error)
 	ToggleVisibility(ctx context.Context, userID, tripID, visibility string) (*dto.PublicTripDetail, error)
 }
 
 type publicTripService struct {
 	publicTripRepo repository.PublicTripRepository
 	tripRepo       repository.TripRepository
+	tripLikeRepo   repository.TripLikeRepository
 }
 
 // NewPublicTripService creates a new public trip service instance
-func NewPublicTripService(publicTripRepo repository.PublicTripRepository, tripRepo repository.TripRepository) PublicTripService {
+func NewPublicTripService(publicTripRepo repository.PublicTripRepository, tripRepo repository.TripRepository, tripLikeRepo repository.TripLikeRepository) PublicTripService {
 	return &publicTripService{
 		publicTripRepo: publicTripRepo,
 		tripRepo:       tripRepo,
+		tripLikeRepo:   tripLikeRepo,
 	}
 }
 
-func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPublicTripsRequest) (*dto.ListPublicTripsResponse, error) {
+func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPublicTripsRequest, userID *string) (*dto.ListPublicTripsResponse, error) {
 	// Set defaults
 	if req.Page <= 0 {
 		req.Page = 1
@@ -50,7 +52,6 @@ func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPu
 		MinDays:       req.MinDays,
 		MaxDays:       req.MaxDays,
 		Months:        req.Months,
-		Tags:          req.Tags,
 		TravelerTypes: req.TravelerTypes,
 		Sort:          req.Sort,
 		Page:          req.Page,
@@ -64,8 +65,28 @@ func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPu
 
 	// Convert to DTOs
 	summaries := make([]dto.PublicTripSummary, len(publicTrips))
+	tripIDs := make([]string, len(publicTrips))
 	for i, pt := range publicTrips {
 		summaries[i] = s.toPublicTripSummary(&pt)
+		tripIDs[i] = pt.ID
+	}
+
+	// If user is authenticated, batch check which trips they liked
+	if userID != nil && len(tripIDs) > 0 {
+		likedTripIDs, err := s.tripLikeRepo.GetUserLikedTripIDs(ctx, *userID, tripIDs)
+		if err == nil {
+			// Create a map for O(1) lookup
+			likedMap := make(map[string]bool)
+			for _, id := range likedTripIDs {
+				likedMap[id] = true
+			}
+
+			// Update summaries with hasLiked
+			for i := range summaries {
+				hasLiked := likedMap[summaries[i].ID]
+				summaries[i].HasLiked = &hasLiked
+			}
+		}
 	}
 
 	return &dto.ListPublicTripsResponse{
@@ -76,7 +97,7 @@ func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPu
 	}, nil
 }
 
-func (s *publicTripService) GetPublicTrip(ctx context.Context, tripID string) (*dto.PublicTripDetail, error) {
+func (s *publicTripService) GetPublicTrip(ctx context.Context, tripID string, userID *string) (*dto.PublicTripDetail, error) {
 	publicTrip, err := s.publicTripRepo.FindByID(ctx, tripID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -85,7 +106,17 @@ func (s *publicTripService) GetPublicTrip(ctx context.Context, tripID string) (*
 		return nil, err
 	}
 
-	return s.toPublicTripDetail(publicTrip), nil
+	detail := s.toPublicTripDetail(publicTrip)
+
+	// If user is authenticated, check if they liked this trip
+	if userID != nil {
+		hasLiked, err := s.tripLikeRepo.HasLiked(ctx, *userID, tripID)
+		if err == nil {
+			detail.HasLiked = &hasLiked
+		}
+	}
+
+	return detail, nil
 }
 
 func (s *publicTripService) ToggleVisibility(ctx context.Context, userID, tripID, visibility string) (*dto.PublicTripDetail, error) {
@@ -141,10 +172,19 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 
 	// Get start month from first day plan if available
 	startMonth := 1
+	endMonth := 1
 	if len(trip.DayPlans) > 0 {
 		firstDate, err := time.Parse(time.RFC3339, trip.DayPlans[0].Date)
 		if err == nil {
 			startMonth = int(firstDate.Month())
+		}
+
+		// Get end month from last day plan
+		lastDate, err := time.Parse(time.RFC3339, trip.DayPlans[len(trip.DayPlans)-1].Date)
+		if err == nil {
+			endMonth = int(lastDate.Month())
+		} else {
+			endMonth = startMonth
 		}
 	}
 
@@ -157,7 +197,7 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 		OriginCities: originCities,
 		DurationDays: durationDays,
 		StartMonth:   startMonth,
-		Tags:         trip.Tags,
+		EndMonth:     endMonth,
 		TravelerType: trip.TravelerType,
 		UpdatedAt:    trip.UpdatedAt.Format(time.RFC3339),
 		Likes:        trip.Likes,

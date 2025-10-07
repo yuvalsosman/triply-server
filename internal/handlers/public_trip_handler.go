@@ -33,7 +33,13 @@ func (h *PublicTripHandler) ListPublicTrips(c *fiber.Ctx) error {
 		req.Query = &query
 	}
 
-	resp, err := h.publicTripService.ListPublicTrips(c.Context(), req)
+	// Get user ID if authenticated (optional)
+	var userID *string
+	if uid := middleware.GetUserID(c); uid != "" {
+		userID = &uid
+	}
+
+	resp, err := h.publicTripService.ListPublicTrips(c.Context(), req, userID)
 	if err != nil {
 		return err
 	}
@@ -48,7 +54,13 @@ func (h *PublicTripHandler) GetPublicTripDetail(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "tripId is required")
 	}
 
-	trip, err := h.publicTripService.GetPublicTrip(c.Context(), tripID)
+	// Get user ID if authenticated (optional)
+	var userID *string
+	if uid := middleware.GetUserID(c); uid != "" {
+		userID = &uid
+	}
+
+	trip, err := h.publicTripService.GetPublicTrip(c.Context(), tripID, userID)
 	if err != nil {
 		return err
 	}

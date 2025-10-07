@@ -28,8 +28,7 @@ type Activity struct {
 	Images   StringArray `json:"images" gorm:"type:text"` // JSON array
 
 	// Metadata
-	Tags StringArray `json:"tags" gorm:"type:text"` // photography, family-friendly, must-see
-	URL  *string     `json:"url" gorm:"type:text"`  // external link
+	URL *string `json:"url" gorm:"type:text"` // external link
 
 	// Stats (for recommendations)
 	UsageCount    int     `json:"usageCount" gorm:"default:0;index:idx_usage,sort:desc"`
@@ -43,9 +42,9 @@ type Activity struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 
 	// Relations
-	CreatedByUser     *User               `json:"-" gorm:"foreignKey:CreatedByUserID"`
-	DayPlanActivities []DayPlanActivity   `json:"-" gorm:"foreignKey:ActivityID"`
-	ActivityImports   []ActivityImport    `json:"-" gorm:"foreignKey:ActivityID"`
+	CreatedByUser     *User             `json:"-" gorm:"foreignKey:CreatedByUserID"`
+	DayPlanActivities []DayPlanActivity `json:"-" gorm:"foreignKey:ActivityID"`
+	ActivityImports   []ActivityImport  `json:"-" gorm:"foreignKey:ActivityID"`
 }
 
 // TableName specifies the table name for Activity

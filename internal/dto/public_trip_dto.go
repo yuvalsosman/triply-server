@@ -12,10 +12,11 @@ type PublicTripSummary struct {
 	OriginCities []string `json:"originCities"`
 	DurationDays int      `json:"durationDays"`
 	StartMonth   int      `json:"startMonth"`
-	Tags         []string `json:"tags"`
+	EndMonth     int      `json:"endMonth"`
 	TravelerType string   `json:"travelerType"` // Single value
 	UpdatedAt    string   `json:"updatedAt"`
 	Likes        int      `json:"likes"`
+	HasLiked     *bool    `json:"hasLiked,omitempty"` // null if not authenticated
 }
 
 // Author information for public trips
@@ -48,7 +49,6 @@ type ListPublicTripsRequest struct {
 	MinDays       *int     `json:"minDays"`
 	MaxDays       *int     `json:"maxDays"`
 	Months        []int    `json:"months"`
-	Tags          []string `json:"tags"`
 	TravelerTypes []string `json:"travelerTypes"` // Keep as array for backward compatibility with filter UI
 	Sort          string   `json:"sort"`
 	Page          int      `json:"page"`
@@ -77,4 +77,10 @@ type ToggleVisibilityRequest struct {
 // ToggleVisibilityResponse represents the response for toggling visibility
 type ToggleVisibilityResponse struct {
 	Trip PublicTripDetail `json:"trip"`
+}
+
+// LikeToggleResponse represents the response after toggling a like
+type LikeToggleResponse struct {
+	Liked      bool `json:"liked"`
+	TotalLikes int  `json:"totalLikes"`
 }
