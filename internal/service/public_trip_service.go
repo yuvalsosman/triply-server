@@ -45,12 +45,20 @@ func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPu
 		req.Sort = "featured"
 	}
 
+	// Convert DTO durations to repository durations
+	var durations []repository.DurationRange
+	for _, d := range req.Durations {
+		durations = append(durations, repository.DurationRange{
+			MinDays: d.MinDays,
+			MaxDays: d.MaxDays,
+		})
+	}
+
 	// Build filters
 	filters := &repository.PublicTripFilters{
 		Query:         req.Query,
 		Cities:        req.Cities,
-		MinDays:       req.MinDays,
-		MaxDays:       req.MaxDays,
+		Durations:     durations,
 		Months:        req.Months,
 		TravelerTypes: req.TravelerTypes,
 		Sort:          req.Sort,

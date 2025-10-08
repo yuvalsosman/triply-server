@@ -17,12 +17,17 @@ type PublicTripRepository interface {
 	ToggleVisibility(ctx context.Context, tripID string, userID string, visibility string) error
 }
 
+// DurationRange represents a duration filter range
+type DurationRange struct {
+	MinDays *int
+	MaxDays *int
+}
+
 // PublicTripFilters holds filter criteria for listing public trips
 type PublicTripFilters struct {
 	Query         *string
 	Cities        []string
-	MinDays       *int
-	MaxDays       *int
+	Durations     []DurationRange // Multiple duration ranges for OR filtering
 	Months        []int
 	TravelerTypes []string
 	Sort          string
@@ -57,16 +62,37 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 		query = query.Where("EXISTS (SELECT 1 FROM trip_destinations td JOIN destinations d ON td.destination_id = d.id WHERE td.trip_id = trips.id AND d.city IN ?)", filters.Cities)
 	}
 
-	if filters.MinDays != nil {
-		query = query.Where("EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 >= ?", *filters.MinDays)
-	}
+	// Handle multiple duration ranges with OR logic
+	if len(filters.Durations) > 0 {
+		var durationConditions []string
+		var durationArgs []interface{}
 
-	if filters.MaxDays != nil {
-		query = query.Where("EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?", *filters.MaxDays)
+		for _, duration := range filters.Durations {
+			if duration.MinDays != nil && duration.MaxDays != nil {
+				durationConditions = append(durationConditions, "(EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 >= ? AND EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?)")
+				durationArgs = append(durationArgs, *duration.MinDays, *duration.MaxDays)
+			} else if duration.MinDays != nil {
+				durationConditions = append(durationConditions, "EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 >= ?")
+				durationArgs = append(durationArgs, *duration.MinDays)
+			} else if duration.MaxDays != nil {
+				durationConditions = append(durationConditions, "EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?")
+				durationArgs = append(durationArgs, *duration.MaxDays)
+			}
+		}
+
+		if len(durationConditions) > 0 {
+			durationSQL := strings.Join(durationConditions, " OR ")
+			query = query.Where("("+durationSQL+")", durationArgs...)
+		}
 	}
 
 	if len(filters.TravelerTypes) > 0 {
 		query = query.Where("trips.traveler_type IN ?", filters.TravelerTypes)
+	}
+
+	if len(filters.Months) > 0 {
+		// Filter by start month - check if the trip starts in any of the selected months
+		query = query.Where("EXISTS (SELECT 1 FROM day_plans dp WHERE dp.trip_id = trips.id AND EXTRACT(MONTH FROM dp.date::timestamp) IN ? ORDER BY dp.day_number ASC LIMIT 1)", filters.Months)
 	}
 
 	// Count total - reuse the same query conditions
@@ -86,6 +112,38 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 	}
 	if len(filters.Cities) > 0 {
 		countQuery = countQuery.Where("EXISTS (SELECT 1 FROM trip_destinations td JOIN destinations d ON td.destination_id = d.id WHERE td.trip_id = trips.id AND d.city IN ?)", filters.Cities)
+	}
+
+	// Apply duration filters to count query
+	if len(filters.Durations) > 0 {
+		var durationConditions []string
+		var durationArgs []interface{}
+
+		for _, duration := range filters.Durations {
+			if duration.MinDays != nil && duration.MaxDays != nil {
+				durationConditions = append(durationConditions, "(EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 >= ? AND EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?)")
+				durationArgs = append(durationArgs, *duration.MinDays, *duration.MaxDays)
+			} else if duration.MinDays != nil {
+				durationConditions = append(durationConditions, "EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 >= ?")
+				durationArgs = append(durationArgs, *duration.MinDays)
+			} else if duration.MaxDays != nil {
+				durationConditions = append(durationConditions, "EXTRACT(DAY FROM (trips.end_date::timestamp - trips.start_date::timestamp)) + 1 <= ?")
+				durationArgs = append(durationArgs, *duration.MaxDays)
+			}
+		}
+
+		if len(durationConditions) > 0 {
+			durationSQL := strings.Join(durationConditions, " OR ")
+			countQuery = countQuery.Where("("+durationSQL+")", durationArgs...)
+		}
+	}
+
+	if len(filters.TravelerTypes) > 0 {
+		countQuery = countQuery.Where("trips.traveler_type IN ?", filters.TravelerTypes)
+	}
+
+	if len(filters.Months) > 0 {
+		countQuery = countQuery.Where("EXISTS (SELECT 1 FROM day_plans dp WHERE dp.trip_id = trips.id AND EXTRACT(MONTH FROM dp.date::timestamp) IN ? ORDER BY dp.day_number ASC LIMIT 1)", filters.Months)
 	}
 
 	if err := countQuery.Count(&total).Error; err != nil {

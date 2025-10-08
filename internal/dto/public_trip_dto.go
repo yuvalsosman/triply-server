@@ -42,17 +42,22 @@ type PublicTripDetail struct {
 	Metadata   Metadata         `json:"metadata"`
 }
 
+// DurationRange represents a duration filter range
+type DurationRange struct {
+	MinDays *int `json:"minDays"`
+	MaxDays *int `json:"maxDays"`
+}
+
 // ListPublicTripsRequest represents filters for listing public trips
 type ListPublicTripsRequest struct {
-	Query         *string  `json:"query"`
-	Cities        []string `json:"cities"`
-	MinDays       *int     `json:"minDays"`
-	MaxDays       *int     `json:"maxDays"`
-	Months        []int    `json:"months"`
-	TravelerTypes []string `json:"travelerTypes"` // Keep as array for backward compatibility with filter UI
-	Sort          string   `json:"sort"`
-	Page          int      `json:"page"`
-	PageSize      int      `json:"pageSize"`
+	Query         *string         `json:"query"`
+	Cities        []string        `json:"cities"`
+	Durations     []DurationRange `json:"durations"` // Array of duration ranges for multiple selections
+	Months        []int           `json:"months"`
+	TravelerTypes []string        `json:"travelerTypes"` // Array for multiple selections
+	Sort          string          `json:"sort"`
+	Page          int             `json:"page"`
+	PageSize      int             `json:"pageSize"`
 }
 
 // ListPublicTripsResponse represents the response for listing public trips

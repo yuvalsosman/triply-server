@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"triply-server/internal/dto"
 	"triply-server/internal/middleware"
 	"triply-server/internal/service"
@@ -27,10 +28,22 @@ func (h *PublicTripHandler) ListPublicTrips(c *fiber.Ctx) error {
 		Sort:     c.Query("sort", "featured"),
 	}
 
-	// Parse filters from query string if provided
-	// For simplicity, we'll handle basic filters
-	if query := c.Query("query"); query != "" {
-		req.Query = &query
+	// Parse filters from JSON query string if provided
+	if filtersJSON := c.Query("filters"); filtersJSON != "" {
+		var filters struct {
+			Query         *string             `json:"query"`
+			Cities        []string            `json:"cities"`
+			Durations     []dto.DurationRange `json:"durations"`
+			Months        []int               `json:"months"`
+			TravelerTypes []string            `json:"travelerTypes"`
+		}
+		if err := json.Unmarshal([]byte(filtersJSON), &filters); err == nil {
+			req.Query = filters.Query
+			req.Cities = filters.Cities
+			req.Durations = filters.Durations
+			req.Months = filters.Months
+			req.TravelerTypes = filters.TravelerTypes
+		}
 	}
 
 	// Get user ID if authenticated (optional)
