@@ -327,7 +327,7 @@ func seedDemoData(db *gorm.DB) error {
 	trip := models.Trip{
 		ID:            "trip-001",
 		UserID:        demoUser.ID,
-		Name:          "My Japan Trip",
+		Name:          "הטיול שלי ליפן",
 		Description:   &desc,
 		TravelerCount: 2,
 		StartDate:     "2025-03-28",
@@ -498,6 +498,30 @@ func seedPublicTrips(db *gorm.DB) error {
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
+		"Nagoya": {
+			ID:        "dest-nagoya-public",
+			City:      "Nagoya",
+			Region:    ptr("Chubu"),
+			Country:   "Japan",
+			Latitude:  ptr(35.1815),
+			Longitude: ptr(136.9066),
+			Timezone:  ptr("Asia/Tokyo"),
+			HeroImage: ptr("https://images.unsplash.com/photo-1624993590528-4ee743c9896e?auto=format&fit=crop&w=1400&q=80"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"Hiroshima": {
+			ID:        "dest-hiroshima-public",
+			City:      "Hiroshima",
+			Region:    ptr("Chugoku"),
+			Country:   "Japan",
+			Latitude:  ptr(34.3853),
+			Longitude: ptr(132.4553),
+			Timezone:  ptr("Asia/Tokyo"),
+			HeroImage: ptr("https://images.unsplash.com/photo-1590559899731-a382839e5549?auto=format&fit=crop&w=1400&q=80"),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
 	}
 
 	for _, dest := range destinations {
@@ -515,7 +539,7 @@ func seedPublicTrips(db *gorm.DB) error {
 			trip: models.Trip{
 				ID:            "pt-tokyo-week-discovery",
 				UserID:        authorUser.ID,
-				Name:          "Tokyo Week Discovery",
+				Name:          "גילוי טוקיו בשבוע",
 				Description:   ptr("Experience Tokyo's perfect blend of ancient tradition and cutting-edge modernity in one exciting week."),
 				Slug:          ptr("tokyo-week-discovery"),
 				TravelerCount: 2,
@@ -537,7 +561,7 @@ func seedPublicTrips(db *gorm.DB) error {
 			trip: models.Trip{
 				ID:            "pt-tokyo-kyoto-10days",
 				UserID:        authorUser.ID,
-				Name:          "Tokyo & Kyoto Cultural Journey",
+				Name:          "מסע תרבותי בטוקיו וקיוטו",
 				Description:   ptr("A perfect 10-day journey combining Tokyo's modern energy with Kyoto's timeless beauty and traditions."),
 				Slug:          ptr("tokyo-kyoto-10-day-cultural-journey"),
 				TravelerCount: 2,
@@ -559,7 +583,7 @@ func seedPublicTrips(db *gorm.DB) error {
 			trip: models.Trip{
 				ID:            "pt-kansai-grand-tour-14days",
 				UserID:        authorUser.ID,
-				Name:          "Ultimate Kansai Grand Tour",
+				Name:          "סיור קנסאי הגדול האולטימטיבי",
 				Description:   ptr("The ultimate 2-week Japan adventure covering Tokyo's energy, Kyoto's culture, and Osaka's culinary delights."),
 				Slug:          ptr("ultimate-kansai-tokyo-kyoto-osaka-14-days"),
 				TravelerCount: 2,
@@ -576,6 +600,28 @@ func seedPublicTrips(db *gorm.DB) error {
 				PublishedAt:   ptr(now.AddDate(0, 0, -33)),
 			},
 			destinations: []string{"Tokyo", "Kyoto", "Osaka"},
+		},
+		{
+			trip: models.Trip{
+				ID:            "pt-japan-grand-adventure-28days",
+				UserID:        authorUser.ID,
+				Name:          "הרפתקה גדולה ביפן - חודש מלא",
+				Description:   ptr("An epic 28-day journey exploring Japan from Tokyo to Hiroshima, experiencing the full diversity of Japanese culture, cuisine, and landscapes."),
+				Slug:          ptr("japan-grand-adventure-28-days-tokyo-kyoto-osaka-nagoya-hiroshima"),
+				TravelerCount: 1,
+				StartDate:     "2025-04-05",
+				EndDate:       "2025-05-02",
+				HeroImage:     ptr("https://images.unsplash.com/photo-1590559899731-a382839e5549?auto=format&fit=crop&w=1200&q=80"),
+				Visibility:    "public",
+				Status:        "completed",
+				Summary:       ptr("מסע אפי של 28 ימים לחקור את יפן מטוקיו להירושימה, לחוות את המגוון המלא של התרבות, המטבח והנופים היפניים."),
+				TravelerType:  string(models.TravelerTypeSolo),
+				Likes:         892,
+				CreatedAt:     now.AddDate(0, 0, -45),
+				UpdatedAt:     now.AddDate(0, 0, -3),
+				PublishedAt:   ptr(now.AddDate(0, 0, -44)),
+			},
+			destinations: []string{"Tokyo", "Kyoto", "Osaka", "Nagoya", "Hiroshima"},
 		},
 	}
 
@@ -696,6 +742,54 @@ func seedTripItinerary(db *gorm.DB, trip *models.Trip, destinations map[string]m
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		},
+		{
+			ID:              "act-nagoya-castle",
+			Title:           "Nagoya Castle",
+			Type:            "culture",
+			Location:        ptr("Nagoya"),
+			Latitude:        ptr(35.1856),
+			Longitude:       ptr(136.8998),
+			Description:     ptr("Historic castle with golden shachihoko"),
+			DurationMinutes: ptr(120),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-atsuta-shrine",
+			Title:           "Atsuta Shrine",
+			Type:            "culture",
+			Location:        ptr("Nagoya"),
+			Latitude:        ptr(35.1280),
+			Longitude:       ptr(136.9083),
+			Description:     ptr("One of Japan's most important Shinto shrines"),
+			DurationMinutes: ptr(90),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-peace-memorial",
+			Title:           "Hiroshima Peace Memorial Park",
+			Type:            "culture",
+			Location:        ptr("Hiroshima"),
+			Latitude:        ptr(34.3955),
+			Longitude:       ptr(132.4536),
+			Description:     ptr("Memorial dedicated to peace and the atomic bombing victims"),
+			DurationMinutes: ptr(120),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "act-miyajima",
+			Title:           "Miyajima Island & Itsukushima Shrine",
+			Type:            "culture",
+			Location:        ptr("Miyajima"),
+			Latitude:        ptr(34.2959),
+			Longitude:       ptr(132.3197),
+			Description:     ptr("Famous floating torii gate and sacred island"),
+			DurationMinutes: ptr(240),
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
 	}
 
 	// Create activities if they don't exist
@@ -747,6 +841,19 @@ func seedTripItinerary(db *gorm.DB, trip *models.Trip, destinations map[string]m
 			} else {
 				destID = destinations["Osaka"].ID
 			}
+		} else if trip.ID == "pt-japan-grand-adventure-28days" {
+			// 28 days across 5 cities: Tokyo (6 days), Kyoto (7 days), Osaka (5 days), Nagoya (5 days), Hiroshima (5 days)
+			if i < 6 {
+				destID = destinations["Tokyo"].ID
+			} else if i < 13 {
+				destID = destinations["Kyoto"].ID
+			} else if i < 18 {
+				destID = destinations["Osaka"].ID
+			} else if i < 23 {
+				destID = destinations["Nagoya"].ID
+			} else {
+				destID = destinations["Hiroshima"].ID
+			}
 		}
 
 		// Link destination to day
@@ -773,8 +880,15 @@ func seedTripItinerary(db *gorm.DB, trip *models.Trip, destinations map[string]m
 				activityID = []string{"act-senso-ji", "act-tsukiji-market", "act-shibuya-crossing"}[j%3]
 			} else if destID == destinations["Kyoto"].ID {
 				activityID = []string{"act-fushimi-inari", "act-arashiyama-bamboo"}[j%2]
-			} else {
+			} else if destID == destinations["Osaka"].ID {
 				activityID = []string{"act-osaka-castle", "act-dotonbori"}[j%2]
+			} else if destID == destinations["Nagoya"].ID {
+				activityID = []string{"act-nagoya-castle", "act-atsuta-shrine"}[j%2]
+			} else if destID == destinations["Hiroshima"].ID {
+				activityID = []string{"act-peace-memorial", "act-miyajima"}[j%2]
+			} else {
+				// Fallback for any other destination
+				activityID = []string{"act-senso-ji", "act-tsukiji-market"}[j%2]
 			}
 
 			if j == 0 {
