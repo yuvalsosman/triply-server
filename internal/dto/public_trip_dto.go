@@ -57,10 +57,11 @@ type ListPublicTripsRequest struct {
 
 // ListPublicTripsResponse represents the response for listing public trips
 type ListPublicTripsResponse struct {
-	Trips    []PublicTripSummary `json:"trips"`
-	Total    int                 `json:"total"`
-	Page     int                 `json:"page"`
-	PageSize int                 `json:"pageSize"`
+	Trips        []PublicTripSummary `json:"trips"`
+	Total        int                 `json:"total"`
+	Page         int                 `json:"page"`
+	PageSize     int                 `json:"pageSize"`
+	HasMorePages bool                `json:"hasMorePages"`
 }
 
 // PublicTripDetailResponse represents the response for getting a public trip

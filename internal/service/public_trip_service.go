@@ -89,11 +89,15 @@ func (s *publicTripService) ListPublicTrips(ctx context.Context, req *dto.ListPu
 		}
 	}
 
+	// Calculate if there are more pages
+	hasMorePages := (req.Page * req.PageSize) < int(total)
+
 	return &dto.ListPublicTripsResponse{
-		Trips:    summaries,
-		Total:    int(total),
-		Page:     req.Page,
-		PageSize: req.PageSize,
+		Trips:        summaries,
+		Total:        int(total),
+		Page:         req.Page,
+		PageSize:     req.PageSize,
+		HasMorePages: hasMorePages,
 	}, nil
 }
 
