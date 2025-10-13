@@ -82,6 +82,28 @@ OAUTH_REDIRECT_URL=http://localhost:8080/auth/google/callback
    - **Authorized redirect URIs:** `http://localhost:8080/auth/google/callback`
 6. Copy Client ID and Client Secret to `.env`
 
+### Google Maps API (Required for Maps)
+
+```bash
+# Google Maps API Configuration
+GOOGLE_MAPS_API_KEY=AIzaSyA...your-api-key
+```
+
+**To get Google Maps API key:**
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the following APIs:
+   - Maps JavaScript API
+   - Places API
+3. Create an API Key in "APIs & Services" > "Credentials"
+4. **IMPORTANT:** Restrict the API key:
+   - **Application restrictions:** Set to "HTTP referrers (web sites)"
+   - Add your domains: `http://localhost:3001/*`, `https://yourdomain.com/*`
+   - **API restrictions:** Limit to "Maps JavaScript API" and "Places API"
+5. Copy the API key to `.env`
+
+**Security Note:** The API key is provided to the frontend through a server proxy endpoint (`/api/maps/config`) but is protected by HTTP referrer restrictions in Google Cloud Console, preventing unauthorized use.
+
 ---
 
 ## Running Locally

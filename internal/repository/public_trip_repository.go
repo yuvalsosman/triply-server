@@ -15,6 +15,7 @@ type PublicTripRepository interface {
 	FindByID(ctx context.Context, id string) (*models.Trip, error)
 	FindBySlug(ctx context.Context, slug string) (*models.Trip, error)
 	ToggleVisibility(ctx context.Context, tripID string, userID string, visibility string) error
+	IncrementCloneCount(ctx context.Context, tripID string) error
 }
 
 // DurationRange represents a duration filter range
@@ -261,4 +262,11 @@ func (r *publicTripRepository) ToggleVisibility(ctx context.Context, tripID stri
 		Model(&models.Trip{}).
 		Where("id = ? AND user_id = ?", tripID, userID).
 		Updates(updates).Error
+}
+
+func (r *publicTripRepository) IncrementCloneCount(ctx context.Context, tripID string) error {
+	return r.db.WithContext(ctx).
+		Model(&models.Trip{}).
+		Where("id = ?", tripID).
+		UpdateColumn("clone_count", gorm.Expr("clone_count + ?", 1)).Error
 }

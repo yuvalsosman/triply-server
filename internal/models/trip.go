@@ -40,6 +40,7 @@ type Trip struct {
 	Summary      *string `json:"summary" gorm:"type:text"`
 	TravelerType string  `json:"travelerType" gorm:"size:50;not null;default:''"` // סולו, זוג, משפחה, חברים (single value)
 	Likes        int     `json:"likes" gorm:"default:0"`
+	CloneCount   int     `json:"cloneCount" gorm:"default:0"` // Number of times this trip has been cloned
 
 	// Timestamps
 	CreatedAt   time.Time  `json:"createdAt"`

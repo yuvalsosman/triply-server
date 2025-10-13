@@ -56,7 +56,7 @@ func main() {
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo)
-	tripService := service.NewTripService(tripRepo)
+	tripService := service.NewTripService(tripRepo, publicTripRepo)
 	publicTripService := service.NewPublicTripService(publicTripRepo, tripRepo, tripLikeRepo)
 	activityService := service.NewActivityService(activityRepo)
 	importService := service.NewImportService(publicTripRepo, tripRepo)
@@ -72,6 +72,7 @@ func main() {
 	activityHandler := handlers.NewActivityHandler(activityService)
 	importHandler := handlers.NewImportHandler(importService)
 	tripLikeHandler := handlers.NewTripLikeHandler(tripLikeService)
+	mapsHandler := handlers.NewMapsHandler(cfg.Maps.APIKey)
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWT.Secret)
@@ -141,8 +142,15 @@ func main() {
 	apiRoutes.Post("/public-trips/:tripId/visibility", authMiddleware.OptionalAuth, publicTripHandler.ToggleVisibility)
 	apiRoutes.Post("/public-trips/:tripId/like", authMiddleware.RequireAuth, tripLikeHandler.ToggleLike)
 
+	// Clone trip route (requires authentication)
+	apiRoutes.Post("/trips/clone/:tripId", authMiddleware.RequireAuth, tripHandler.CloneTrip)
+
 	// Import routes (protected)
 	apiRoutes.Post("/import-trip", authMiddleware.OptionalAuth, importHandler.ImportTripParts)
+
+	// Maps API routes (public - protected by HTTP referrer restrictions in Google Cloud Console)
+	apiRoutes.Get("/maps/config", mapsHandler.GetMapConfig)
+	apiRoutes.Get("/photo", mapsHandler.ProxyPhoto) // Proxy for Google Maps/Places photos
 
 	// Start server
 	log.Printf("🚀 Triply server listening on :%s", cfg.Server.Port)

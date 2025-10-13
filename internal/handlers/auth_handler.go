@@ -37,7 +37,16 @@ func (h *AuthHandler) GoogleLogin(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotImplemented, "Google OAuth not configured")
 	}
 
-	state := "triply-state" // In production, use random state and store in session
+	// Get the redirect path from query param (e.g., ?redirect=/explore/pt-some-trip)
+	redirectPath := c.Query("redirect", "")
+
+	// Encode redirect path in state parameter
+	state := "triply-state"
+	if redirectPath != "" {
+		// In production, should also include CSRF token
+		state = "triply-state:" + redirectPath
+	}
+
 	authURL := h.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	return c.Redirect(authURL, fiber.StatusTemporaryRedirect)
 }
@@ -106,8 +115,20 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 		MaxAge:   60 * 60 * 24 * 7,
 	})
 
-	// Redirect to frontend
-	return c.Redirect(h.frontendOrigin)
+	// Extract redirect path from state parameter
+	state := c.Query("state", "")
+	redirectURL := h.frontendOrigin
+
+	// Check if state contains redirect path (format: "triply-state:/path/to/redirect")
+	if len(state) > len("triply-state:") && state[:len("triply-state:")] == "triply-state:" {
+		redirectPath := state[len("triply-state:"):]
+		if redirectPath != "" {
+			redirectURL = h.frontendOrigin + redirectPath
+		}
+	}
+
+	// Redirect to frontend (homepage or specific path)
+	return c.Redirect(redirectURL)
 }
 
 // GetMe handles GET /auth/me

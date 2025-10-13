@@ -142,3 +142,38 @@ func (h *TripHandler) DeleteTrip(c *fiber.Ctx) error {
 
 	return c.JSON(dto.DeleteResponse{Success: true})
 }
+
+// CloneTrip handles POST /api/trips/clone/:tripId
+func (h *TripHandler) CloneTrip(c *fiber.Ctx) error {
+	// Must be authenticated (shadow users cannot clone trips)
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return utils.NewUnauthorizedError()
+	}
+
+	tripID := c.Params("tripId")
+	if tripID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "tripId is required")
+	}
+
+	// Parse request body
+	var req struct {
+		TripName string `json:"tripName" validate:"required"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+	}
+
+	if req.TripName == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "tripName is required")
+	}
+
+	// Clone the trip
+	clonedTrip, err := h.tripService.ClonePublicTrip(c.Context(), tripID, userID, req.TripName)
+	if err != nil {
+		return err
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(clonedTrip)
+}

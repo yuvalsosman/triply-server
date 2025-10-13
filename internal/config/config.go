@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	Auth     AuthConfig
 	JWT      JWTConfig
+	Maps     MapsConfig
 }
 
 // ServerConfig holds server configuration
@@ -38,6 +39,11 @@ type JWTConfig struct {
 	Secret string
 }
 
+// MapsConfig holds Google Maps configuration
+type MapsConfig struct {
+	APIKey string
+}
+
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	// Try to load .env file (ignore error if not found)
@@ -58,6 +64,9 @@ func Load() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", "dev-secret-change-me"),
+		},
+		Maps: MapsConfig{
+			APIKey: os.Getenv("GOOGLE_MAPS_API_KEY"),
 		},
 	}
 
