@@ -92,8 +92,13 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 	}
 
 	if len(filters.Months) > 0 {
-		// Filter by start month - check if the trip starts in any of the selected months
-		query = query.Where("EXISTS (SELECT 1 FROM day_plans dp WHERE dp.trip_id = trips.id AND EXTRACT(MONTH FROM dp.date::timestamp) IN ? ORDER BY dp.day_number ASC LIMIT 1)", filters.Months)
+		// Filter by month - check both day_plans (for legacy trips) and trip dates (for new trips)
+		// A trip matches if ANY day falls in the selected months
+		query = query.Where(`(
+			EXISTS (SELECT 1 FROM day_plans dp WHERE dp.trip_id = trips.id AND EXTRACT(MONTH FROM dp.date::timestamp) IN ?)
+			OR EXTRACT(MONTH FROM trips.start_date::timestamp) IN ?
+			OR EXTRACT(MONTH FROM trips.end_date::timestamp) IN ?
+		)`, filters.Months, filters.Months, filters.Months)
 	}
 
 	// Count total - reuse the same query conditions
@@ -144,7 +149,13 @@ func (r *publicTripRepository) FindAll(ctx context.Context, filters *PublicTripF
 	}
 
 	if len(filters.Months) > 0 {
-		countQuery = countQuery.Where("EXISTS (SELECT 1 FROM day_plans dp WHERE dp.trip_id = trips.id AND EXTRACT(MONTH FROM dp.date::timestamp) IN ? ORDER BY dp.day_number ASC LIMIT 1)", filters.Months)
+		// Filter by month - check both day_plans (for legacy trips) and trip dates (for new trips)
+		// A trip matches if ANY day falls in the selected months
+		countQuery = countQuery.Where(`(
+			EXISTS (SELECT 1 FROM day_plans dp WHERE dp.trip_id = trips.id AND EXTRACT(MONTH FROM dp.date::timestamp) IN ?)
+			OR EXTRACT(MONTH FROM trips.start_date::timestamp) IN ?
+			OR EXTRACT(MONTH FROM trips.end_date::timestamp) IN ?
+		)`, filters.Months, filters.Months, filters.Months)
 	}
 
 	if err := countQuery.Count(&total).Error; err != nil {
