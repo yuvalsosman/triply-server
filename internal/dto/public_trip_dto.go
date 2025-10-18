@@ -4,19 +4,19 @@ import "triply-server/internal/models"
 
 // PublicTripSummary represents a summarized public trip for list views
 type PublicTripSummary struct {
-	ID           string   `json:"id"`
-	Title        string   `json:"title"`
-	Slug         string   `json:"slug"`
-	HeroImageURL string   `json:"heroImageUrl"`
-	Summary      *string  `json:"summary,omitempty"`
-	OriginCities []string `json:"originCities"`
-	DurationDays int      `json:"durationDays"`
-	StartMonth   int      `json:"startMonth"`
-	EndMonth     int      `json:"endMonth"`
-	TravelerType string   `json:"travelerType"` // Single value
-	UpdatedAt    string   `json:"updatedAt"`
-	Likes        int      `json:"likes"`
-	HasLiked     *bool    `json:"hasLiked,omitempty"` // null if not authenticated
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Slug          string   `json:"slug"`
+	CoverImageURL string   `json:"coverImageUrl"`
+	Summary       *string  `json:"summary,omitempty"`
+	OriginCities  []string `json:"originCities"`
+	DurationDays  int      `json:"durationDays"`
+	StartMonth    int      `json:"startMonth"`
+	EndMonth      int      `json:"endMonth"`
+	TravelerType  string   `json:"travelerType"` // Single value
+	UpdatedAt     string   `json:"updatedAt"`
+	Likes         int      `json:"likes"`
+	HasLiked      *bool    `json:"hasLiked,omitempty"` // null if not authenticated
 }
 
 // Author information for public trips
@@ -28,9 +28,8 @@ type Author struct {
 
 // Metadata for public trips
 type Metadata struct {
-	CreatedAt   string `json:"createdAt"`
-	PublishedAt string `json:"publishedAt"`
-	Likes       int    `json:"likes"`
+	CreatedAt string `json:"createdAt"`
+	Likes     int    `json:"likes"`
 }
 
 // PublicTripDetail represents full details of a public trip
@@ -77,7 +76,7 @@ type PublicTripDetailResponse struct {
 // ToggleVisibilityRequest represents a request to change trip visibility
 type ToggleVisibilityRequest struct {
 	TripID     string `json:"tripId"`
-	Visibility string `json:"visibility"`
+	Visibility string `json:"visibility"` // Must be "public" or "private"
 }
 
 // ToggleVisibilityResponse represents the response for toggling visibility

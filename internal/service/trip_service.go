@@ -66,12 +66,12 @@ func (s *tripService) CreateTrip(ctx context.Context, trip *models.Trip) (*model
 
 	// Set default visibility
 	if trip.Visibility == "" {
-		trip.Visibility = "private"
+		trip.Visibility = "public"
 	}
 
 	// Set default status
 	if trip.Status == "" {
-		trip.Status = "planning"
+		trip.Status = "active"
 	}
 
 	// Generate IDs for day plans if provided
@@ -162,15 +162,12 @@ func (s *tripService) ClonePublicTrip(ctx context.Context, publicTripID, userID,
 		ID:            utils.GenerateID("trip"),
 		UserID:        userID,
 		Name:          newTripName,
-		Description:   originalTrip.Description,
 		TravelerCount: originalTrip.TravelerCount,
 		StartDate:     originalTrip.StartDate,
 		EndDate:       originalTrip.EndDate,
-		Timezone:      originalTrip.Timezone,
 		CoverImage:    originalTrip.CoverImage,
-		HeroImage:     originalTrip.HeroImage,
-		Visibility:    "private",  // Always start as private
-		Status:        "planning", // Reset to planning status
+		Visibility:    "private", // Always start as private
+		Status:        "active",  // Start as active status
 		TravelerType:  originalTrip.TravelerType,
 		CreatedAt:     now,
 		UpdatedAt:     now,

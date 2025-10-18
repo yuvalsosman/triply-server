@@ -32,8 +32,8 @@ type Destination struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 
 	// Relations
-	TripDestinations     []TripDestination     `json:"-" gorm:"foreignKey:DestinationID"`
-	DayPlanDestinations  []DayPlanDestination  `json:"-" gorm:"foreignKey:DestinationID"`
+	TripDestinations    []TripDestination    `json:"-" gorm:"foreignKey:DestinationID"`
+	DayPlanDestinations []DayPlanDestination `json:"-" gorm:"foreignKey:DestinationID"`
 }
 
 // TableName specifies the table name for Destination

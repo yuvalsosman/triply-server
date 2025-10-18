@@ -247,17 +247,6 @@ func (r *publicTripRepository) ToggleVisibility(ctx context.Context, tripID stri
 		"updated_at": now,
 	}
 
-	// If making public for the first time, set published_at
-	if visibility == "public" {
-		var trip models.Trip
-		if err := r.db.WithContext(ctx).Select("published_at").Where("id = ?", tripID).First(&trip).Error; err != nil {
-			return err
-		}
-		if trip.PublishedAt == nil {
-			updates["published_at"] = now
-		}
-	}
-
 	return r.db.WithContext(ctx).
 		Model(&models.Trip{}).
 		Where("id = ? AND user_id = ?", tripID, userID).

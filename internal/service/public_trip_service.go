@@ -133,8 +133,8 @@ func (s *publicTripService) GetPublicTrip(ctx context.Context, tripID string, us
 
 func (s *publicTripService) ToggleVisibility(ctx context.Context, userID, tripID, visibility string) (*dto.PublicTripDetail, error) {
 	// Validate visibility
-	if visibility != "public" && visibility != "private" && visibility != "unlisted" {
-		return nil, utils.NewValidationError("visibility must be 'public', 'private', or 'unlisted'")
+	if visibility != "public" && visibility != "private" {
+		return nil, utils.NewValidationError("visibility must be 'public' or 'private'")
 	}
 
 	// Toggle visibility
@@ -161,15 +161,25 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 		}
 	}
 
-	// Calculate duration from day plans count (more reliable than parsing dates)
-	durationDays := len(trip.DayPlans)
-	if durationDays == 0 {
-		// Fallback to date calculation if no day plans
-		start, _ := time.Parse("2006-01-02", trip.StartDate)
-		end, _ := time.Parse("2006-01-02", trip.EndDate)
-		if !start.IsZero() && !end.IsZero() {
-			durationDays = int(end.Sub(start).Hours()/24) + 1
-		}
+	// Parse trip dates (try RFC3339 first, then YYYY-MM-DD format)
+	start, errStart := time.Parse(time.RFC3339, trip.StartDate)
+	if errStart != nil {
+		start, errStart = time.Parse("2006-01-02", trip.StartDate)
+	}
+
+	end, errEnd := time.Parse(time.RFC3339, trip.EndDate)
+	if errEnd != nil {
+		end, errEnd = time.Parse("2006-01-02", trip.EndDate)
+	}
+
+	// Calculate duration - always prefer date calculation if dates are valid
+	durationDays := 0
+	if errStart == nil && errEnd == nil {
+		// Calculate from actual trip dates
+		durationDays = int(end.Sub(start).Hours()/24) + 1
+	} else if len(trip.DayPlans) > 0 {
+		// Fallback to day plans count if date parsing failed
+		durationDays = len(trip.DayPlans)
 	}
 
 	slug := ""
@@ -177,21 +187,21 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 		slug = *trip.Slug
 	}
 
-	heroImage := ""
-	if trip.HeroImage != nil {
-		heroImage = *trip.HeroImage
-	}
-
-	// Get start month from first day plan if available
+	// Get months - always prefer trip dates if available, otherwise use day plans
 	startMonth := 1
 	endMonth := 1
-	if len(trip.DayPlans) > 0 {
+
+	if errStart == nil && errEnd == nil {
+		// Use trip dates for months
+		startMonth = int(start.Month())
+		endMonth = int(end.Month())
+	} else if len(trip.DayPlans) > 0 {
+		// Fallback to day plans if date parsing failed
 		firstDate, err := time.Parse(time.RFC3339, trip.DayPlans[0].Date)
 		if err == nil {
 			startMonth = int(firstDate.Month())
 		}
 
-		// Get end month from last day plan
 		lastDate, err := time.Parse(time.RFC3339, trip.DayPlans[len(trip.DayPlans)-1].Date)
 		if err == nil {
 			endMonth = int(lastDate.Month())
@@ -201,18 +211,18 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 	}
 
 	return dto.PublicTripSummary{
-		ID:           trip.ID,
-		Title:        trip.Name,
-		Slug:         slug,
-		HeroImageURL: heroImage,
-		Summary:      trip.Summary,
-		OriginCities: originCities,
-		DurationDays: durationDays,
-		StartMonth:   startMonth,
-		EndMonth:     endMonth,
-		TravelerType: trip.TravelerType,
-		UpdatedAt:    trip.UpdatedAt.Format(time.RFC3339),
-		Likes:        trip.Likes,
+		ID:            trip.ID,
+		Title:         trip.Name,
+		Slug:          slug,
+		CoverImageURL: trip.CoverImage,
+		Summary:       trip.Summary,
+		OriginCities:  originCities,
+		DurationDays:  durationDays,
+		StartMonth:    startMonth,
+		EndMonth:      endMonth,
+		TravelerType:  trip.TravelerType,
+		UpdatedAt:     trip.UpdatedAt.Format(time.RFC3339),
+		Likes:         trip.Likes,
 	}
 }
 
@@ -224,20 +234,19 @@ func (s *publicTripService) toPublicTripDetail(trip *models.Trip) *dto.PublicTri
 		Name: "Anonymous",
 	}
 	if trip.User != nil {
-		author.Name = trip.User.Name
+		// Prefer DisplayName over Name for public display
+		if trip.User.DisplayName != nil && *trip.User.DisplayName != "" {
+			author.Name = *trip.User.DisplayName
+		} else {
+			author.Name = trip.User.Name
+		}
 		author.AvatarURL = trip.User.AvatarURL
 	}
 
 	// Build metadata
-	publishedAt := ""
-	if trip.PublishedAt != nil {
-		publishedAt = trip.PublishedAt.Format(time.RFC3339)
-	}
-
 	metadata := dto.Metadata{
-		CreatedAt:   trip.CreatedAt.Format(time.RFC3339),
-		PublishedAt: publishedAt,
-		Likes:       trip.Likes,
+		CreatedAt: trip.CreatedAt.Format(time.RFC3339),
+		Likes:     trip.Likes,
 	}
 
 	return &dto.PublicTripDetail{

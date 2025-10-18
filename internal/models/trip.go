@@ -18,23 +18,20 @@ type Trip struct {
 	UserID string `json:"userId" gorm:"size:64;not null;index"`
 
 	// Basic Info
-	Name        string  `json:"name" gorm:"size:255;not null"`
-	Description *string `json:"description" gorm:"type:text"`
-	Slug        *string `json:"slug" gorm:"size:255;uniqueIndex"`
+	Name string  `json:"name" gorm:"size:255;not null"`
+	Slug *string `json:"slug" gorm:"size:255;uniqueIndex"`
 
 	// Trip Details
-	TravelerCount int     `json:"travelerCount" gorm:"default:1"`
-	StartDate     string  `json:"startDate" gorm:"type:date;not null"`
-	EndDate       string  `json:"endDate" gorm:"type:date;not null"`
-	Timezone      *string `json:"timezone" gorm:"size:50"`
+	TravelerCount int    `json:"travelerCount" gorm:"default:1"`
+	StartDate     string `json:"startDate" gorm:"type:date;not null"`
+	EndDate       string `json:"endDate" gorm:"type:date;not null"`
 
 	// Media
-	CoverImage *string `json:"coverImage" gorm:"type:text"`
-	HeroImage  *string `json:"heroImage" gorm:"type:text"`
+	CoverImage string `json:"coverImage" gorm:"type:text;not null"`
 
 	// Visibility & Status
-	Visibility string `json:"visibility" gorm:"size:20;default:'private';index"` // private, unlisted, public
-	Status     string `json:"status" gorm:"size:20;default:'planning'"`          // planning, active, completed, archived
+	Visibility string `json:"visibility" gorm:"size:20;default:'public';index"` // private, public
+	Status     string `json:"status" gorm:"size:20;default:'active'"`           // active, completed
 
 	// Public Trip Metadata (only for public trips)
 	Summary      *string `json:"summary" gorm:"type:text"`
@@ -43,9 +40,8 @@ type Trip struct {
 	CloneCount   int     `json:"cloneCount" gorm:"default:0"` // Number of times this trip has been cloned
 
 	// Timestamps
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	PublishedAt *time.Time `json:"publishedAt"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 
 	// Relations
 	User             *User             `json:"-" gorm:"foreignKey:UserID"`
