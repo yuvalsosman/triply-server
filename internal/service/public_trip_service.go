@@ -218,12 +218,32 @@ func (s *publicTripService) toPublicTripSummary(trip *models.Trip) dto.PublicTri
 		Summary:       trip.Summary,
 		OriginCities:  originCities,
 		DurationDays:  durationDays,
+		StartDate:     s.formatDate(trip.StartDate), // Convert to YYYY-MM-DD
+		EndDate:       s.formatDate(trip.EndDate),   // Convert to YYYY-MM-DD
 		StartMonth:    startMonth,
 		EndMonth:      endMonth,
 		TravelerType:  trip.TravelerType,
 		UpdatedAt:     trip.UpdatedAt.Format(time.RFC3339),
 		Likes:         trip.Likes,
 	}
+}
+
+// formatDate converts a date string to YYYY-MM-DD format
+func (s *publicTripService) formatDate(dateStr string) string {
+	// Try RFC3339 format first
+	t, err := time.Parse(time.RFC3339, dateStr)
+	if err == nil {
+		return t.Format("2006-01-02")
+	}
+
+	// Try YYYY-MM-DD format (in case it's already in this format)
+	_, err = time.Parse("2006-01-02", dateStr)
+	if err == nil {
+		return dateStr
+	}
+
+	// Return as-is if parsing fails
+	return dateStr
 }
 
 func (s *publicTripService) toPublicTripDetail(trip *models.Trip) *dto.PublicTripDetail {

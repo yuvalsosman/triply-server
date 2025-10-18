@@ -22,7 +22,9 @@ type Trip struct {
 	Slug *string `json:"slug" gorm:"size:255;uniqueIndex"`
 
 	// Trip Details
-	TravelerCount int    `json:"travelerCount" gorm:"default:1"`
+	TravelerCount int    `json:"travelerCount" gorm:"default:1"` // Total count (computed from Adults + len(ChildrenAges))
+	Adults        int    `json:"adults" gorm:"default:2"`
+	ChildrenAges  string `json:"childrenAges" gorm:"type:text"` // JSON array of child ages, e.g., "[5,8,12]"
 	StartDate     string `json:"startDate" gorm:"type:date;not null"`
 	EndDate       string `json:"endDate" gorm:"type:date;not null"`
 

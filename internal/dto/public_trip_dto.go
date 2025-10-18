@@ -11,6 +11,8 @@ type PublicTripSummary struct {
 	Summary       *string  `json:"summary,omitempty"`
 	OriginCities  []string `json:"originCities"`
 	DurationDays  int      `json:"durationDays"`
+	StartDate     string   `json:"startDate"` // YYYY-MM-DD format
+	EndDate       string   `json:"endDate"`   // YYYY-MM-DD format
 	StartMonth    int      `json:"startMonth"`
 	EndMonth      int      `json:"endMonth"`
 	TravelerType  string   `json:"travelerType"` // Single value
